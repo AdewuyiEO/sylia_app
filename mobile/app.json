@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Aura",
+    "slug": "aura-stylist",
+    "scheme": "aura",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": false, "bundleIdentifier": "com.aura.stylist" },
+    "android": { "package": "com.aura.stylist" },
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}

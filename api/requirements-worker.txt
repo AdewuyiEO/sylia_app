@@ -1,0 +1,12 @@
+# Sylia WORKER image only — the heavy CV/ML stack. Kept out of the API image
+# so the API stays small and boots fast. Installed by Dockerfile.worker.
+-r requirements.txt
+
+rembg>=2.0                  # U^2-Net background removal
+onnxruntime>=1.17
+open-clip-torch>=2.24       # CLIP zero-shot classification
+torch>=2.2                  # CLIP backend (CPU build via Dockerfile extra-index)
+mediapipe>=0.10             # pose + face mesh
+scikit-learn>=1.4           # k-means colour extraction
+pillow>=10.2
+numpy>=1.26

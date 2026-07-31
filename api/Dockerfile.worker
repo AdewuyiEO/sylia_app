@@ -1,0 +1,27 @@
+# Sylia CV/LLM worker image — the heavy models live here, NOT in the API image.
+# The API stays small and fast; only this image carries torch/CLIP/MediaPipe.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# system libs for opencv / mediapipe / onnxruntime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-worker.txt ./
+# install the full CV stack (base + worker), CPU torch build
+RUN pip install --no-cache-dir -r requirements-worker.txt \
+    --extra-index-url https://download.pytorch.org/whl/cpu
+
+COPY . .
+
+# pre-download model weights at BUILD time so the first job isn't slow:
+#  * rembg U^2-Net  * CLIP ViT-B-32 (laion2b)
+RUN python -c "from rembg import new_session; new_session('u2net')" || true
+RUN python -c "import open_clip; open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')" || true
+# MediaPipe downloads its task bundles on first use; warm them:
+RUN python -c "import mediapipe as mp; mp.solutions.pose; mp.solutions.face_mesh" || true
+
+ENV ENV=prod
+CMD ["celery", "-A", "app.workers.celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=2"]

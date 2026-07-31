@@ -1,0 +1,40 @@
+{
+  "name": "aura-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aura — AI Stylist. Expo app: Today + Closet live on the tested store.",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "test": "tsx src/domain/engine/generate.test.ts && tsx src/data/store.test.ts",
+    "test:engine": "tsx src/domain/engine/generate.test.ts",
+    "test:store": "tsx src/data/store.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "~51.0.0",
+    "expo-router": "~3.5.0",
+    "expo-status-bar": "~1.12.0",
+    "expo-haptics": "~13.0.0",
+    "expo-blur": "~13.0.0",
+    "expo-font": "~12.0.0",
+    "expo-splash-screen": "~0.27.0",
+    "react": "18.2.0",
+    "react-native": "0.74.5",
+    "react-native-reanimated": "~3.10.0",
+    "react-native-gesture-handler": "~2.16.0",
+    "react-native-safe-area-context": "4.10.0",
+    "react-native-screens": "~3.31.0",
+    "react-native-svg": "15.2.0",
+    "react-native-mmkv": "^2.12.0",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/react": "~18.2.79",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}

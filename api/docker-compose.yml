@@ -1,0 +1,36 @@
+# Local dev stack: Postgres + Redis + API + one CV/LLM worker.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: sylia
+      POSTGRES_PASSWORD: sylia
+      POSTGRES_DB: sylia
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://sylia:sylia@db:5432/sylia
+      REDIS_URL: redis://redis:6379/0
+    ports: ["8000:8000"]
+    depends_on: [db, redis]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://sylia:sylia@db:5432/sylia
+      REDIS_URL: redis://redis:6379/0
+    depends_on: [db, redis]
+
+volumes:
+  pgdata:
