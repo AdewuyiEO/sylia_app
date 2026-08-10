@@ -1,15 +1,33 @@
 {
   "expo": {
-    "name": "Aura",
-    "slug": "aura-stylist",
-    "scheme": "aura",
+    "name": "Sylia",
+    "slug": "sylia-stylist",
+    "scheme": "sylia",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": { "supportsTablet": false, "bundleIdentifier": "com.aura.stylist" },
-    "android": { "package": "com.aura.stylist" },
-    "plugins": ["expo-router"],
-    "experiments": { "typedRoutes": true }
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sylia.stylist",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.sylia.stylist"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "38442628-b0f1-4a1d-b3b8-946fc0743cc3"
+      }
+    }
   }
 }

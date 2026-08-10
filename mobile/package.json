@@ -1,8 +1,8 @@
 {
-  "name": "aura-app",
+  "name": "sylia-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Aura — AI Stylist. Expo app: Today + Closet live on the tested store.",
+  "description": "Sylia — AI Stylist. Expo app: Today + Closet live on the tested store.",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -14,26 +14,29 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "expo": "~51.0.0",
-    "expo-router": "~3.5.0",
-    "expo-status-bar": "~1.12.0",
-    "expo-haptics": "~13.0.0",
-    "expo-blur": "~13.0.0",
-    "expo-font": "~12.0.0",
-    "expo-splash-screen": "~0.27.0",
+    "@expo/ngrok": "^4.1.3",
+    "expo": "^57.0.9",
+    "expo-blur": "~14.0.0",
+    "expo-dev-client": "^57.0.10",
+    "expo-font": "~14.0.0",
+    "expo-haptics": "~14.0.0",
+    "expo-router": "~57.0.9",
+    "expo-splash-screen": "~0.30.0",
+    "expo-status-bar": "~2.0.0",
     "react": "18.2.0",
     "react-native": "0.74.5",
-    "react-native-reanimated": "~3.10.0",
-    "react-native-gesture-handler": "~2.16.0",
-    "react-native-safe-area-context": "4.10.0",
-    "react-native-screens": "~3.31.0",
-    "react-native-svg": "15.2.0",
+    "react-native-gesture-handler": "~2.16.1",
     "react-native-mmkv": "^2.12.0",
+    "react-native-reanimated": "~3.10.1",
+    "react-native-safe-area-context": "^5.8.0",
+    "react-native-screens": "~3.31.1",
+    "react-native-svg": "15.2.0",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
-    "@types/react": "~18.2.79",
     "@types/node": "^20.0.0",
+    "@types/react": "^18.3.31",
+    "babel-preset-expo": "^57.0.5",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   }
