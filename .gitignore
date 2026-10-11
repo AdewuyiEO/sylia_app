@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+.venv/
+venv/
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# local env + dev data (keep the .env.example files)
+.env
+.env.*
+!.env.example
+*.db
+_storage/
+
+# expo / react native
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+mobile/ios/
+mobile/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.keystore
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
