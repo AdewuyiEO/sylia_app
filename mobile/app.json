@@ -6,7 +6,6 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.sylia.stylist",
@@ -18,7 +17,17 @@
       "package": "com.sylia.stylist"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#F4EFE6"
+        }
+      ],
+      "expo-sqlite",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
@@ -28,6 +37,7 @@
       "eas": {
         "projectId": "38442628-b0f1-4a1d-b3b8-946fc0743cc3"
       }
-    }
+    },
+    "icon": "./assets/images/icon.png"
   }
 }
