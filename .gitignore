@@ -34,3 +34,7 @@ mobile/android/
 Thumbs.db
 .vscode/
 .idea/
+
+# local test runs
+_e2e/
+*.log
