@@ -21,8 +21,9 @@ def _broker_reachable(url: str, timeout: float = 0.5) -> bool:
         return False
 
 
-# Outside prod, no broker → run tasks inline so dev and tests need zero infra.
-# Without this `.delay()` blocks on connection retries whenever celery is
-# installed but Redis isn't running. Prod never degrades: a missing broker fails.
-if settings.env != "prod" and not _broker_reachable(settings.redis_url):
+# No broker → run tasks inline in the API process, so dev, tests and a single
+# API-only deployment need zero infra. Without this `.delay()` blocks on
+# connection retries whenever celery is installed but Redis isn't running.
+# Set REQUIRE_REDIS=true once a separate worker runs: then a missing broker fails.
+if not settings.require_redis and not _broker_reachable(settings.redis_url):
     celery_app.conf.task_always_eager = True

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 from app.db import engine  # noqa: E402
 from app.models import Base  # noqa: E402
-from app.domains.billing.service import gate_affiliate, AFFILIATE_FIT_THRESHOLD  # noqa: E402
+from app.domains.catalog.router import gate_affiliate, AFFILIATE_FIT_THRESHOLD  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 client = TestClient(app)
@@ -72,7 +72,7 @@ test("affiliate fit-gate blocks under-threshold products at write time", t_fit_g
 
 def t_affiliate_endpoint_gated_and_disclosed():
     H = _auth("bill3@x.com")
-    r = client.get("/v1/affiliate/recommendations", headers=H)
+    r = client.get("/v1/discover", headers=H)
     ok(r.status_code == 200, r.text)
     ok("disclosure" in r.json(), "affiliate disclosure always present")
     ok(isinstance(r.json()["recommendations"], list), "returns a (gated) list")

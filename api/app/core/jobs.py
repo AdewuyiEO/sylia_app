@@ -1,11 +1,16 @@
 """Job-handle pattern (spec §3): CV/LLM endpoints enqueue and return a job_id.
 
-In-memory store for dev/tests; swap for Redis-backed status in prod. The API
-contract (202 + job_id, then poll GET .../jobs/{id}) never changes.
+Status lives in the shared KV store (Redis in prod), so the API process and the
+Celery worker see the same job. The API contract (202 + job_id, then poll
+GET .../jobs/{id}) never changes.
 """
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Any
+
+from .kv import kv
+
+_TTL = 24 * 3600
 
 
 @dataclass
@@ -19,22 +24,31 @@ class Job:
 
 
 class JobStore:
-    def __init__(self) -> None:
-        self._jobs: dict[str, Job] = {}
+    @staticmethod
+    def _key(job_id: str) -> str:
+        return f"job:{job_id}"
 
     def create(self, kind: str, **meta: Any) -> Job:
         job = Job(id=str(uuid.uuid4()), kind=kind, meta=meta)
-        self._jobs[job.id] = job
+        kv.set(self._key(job.id), asdict(job), ttl=_TTL)
         return job
 
     def get(self, job_id: str) -> Job | None:
-        return self._jobs.get(job_id)
+        raw = kv.get(self._key(job_id))
+        return Job(**raw) if raw else None
+
+    def get_owned(self, job_id: str, user_id: str) -> Job | None:
+        """A job is only visible to the user who created it."""
+        job = self.get(job_id)
+        if job is None or job.meta.get("user_id") != user_id:
+            return None
+        return job
 
     def update(self, job_id: str, **fields: Any) -> None:
-        job = self._jobs.get(job_id)
-        if job:
-            for k, v in fields.items():
-                setattr(job, k, v)
+        raw = kv.get(self._key(job_id))
+        if raw:
+            raw.update(fields)
+            kv.set(self._key(job_id), raw, ttl=_TTL)
 
 
 jobs = JobStore()

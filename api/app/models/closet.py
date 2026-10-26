@@ -27,5 +27,10 @@ class ClothingItem(Base):
     warmth_score: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)      # 1-5
     classification_confidence: Mapped[float | None] = mapped_column(Numeric, nullable=True)  # drives confirm step
     tags: Mapped[list] = mapped_column(JSON, default=list)
+    # provenance: free-text brand from the user, or a catalog link when bought via Sylia
+    brand: Mapped[str | None] = mapped_column(String, nullable=True)
+    brand_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("brands.id"), nullable=True, index=True)
+    product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    external_image_url: Mapped[str | None] = mapped_column(String, nullable=True)  # catalog image when added from a product
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)                # soft delete
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

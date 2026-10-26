@@ -131,7 +131,15 @@ def analyze_body(job_id: str, user_id: str, s3_keys: list[str]):
         if front is None:
             jobs.update(job_id, status="failed", error="no front image")
             return
-        analysis = analyze_body_images(front, face)
+        try:
+            analysis = analyze_body_images(front, face)
+        finally:
+            # privacy: raw body photos are never retained, whatever the outcome
+            for k in s3_keys:
+                try:
+                    storage.delete(k)
+                except Exception:
+                    pass
 
         db = SessionLocal()
         try:
@@ -160,6 +168,11 @@ def analyze_body(job_id: str, user_id: str, s3_keys: list[str]):
         })
     except Exception as e:
         jobs.update(job_id, status="failed", error=str(e))
+        for k in s3_keys:   # never leave body photos behind on a failed run either
+            try:
+                storage.delete(k)
+            except Exception:
+                pass
 
 
 process_garment = _register(process_garment)

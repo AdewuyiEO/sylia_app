@@ -36,6 +36,8 @@ def build_context_preamble(db: Session, user_id) -> str:
         lines += [f"- Wants to come across as: {asp}",
                   f"- Prefers to steer away from emphasising: {ins}",
                   f"- Lifestyle: {life.get('activity_level', 'desk')} work setting"]
+        if life.get("coverage") == "modest":
+            lines.append("- Dresses modestly: never suggest sleeveless, cropped, short or sheer pieces")
     else:
         lines.append("- (identity onboarding not completed yet)")
 
@@ -53,6 +55,12 @@ def build_context_preamble(db: Session, user_id) -> str:
     if recent:
         worn = [o for o in recent if o.user_feedback == "worn"]
         lines += ["", f"## Recently worn: {len(worn)} of last {len(recent)} looks logged as worn"]
+
+    from ...models import User
+    u = db.get(User, user_id)
+    if u is not None:
+        lines += ["", f"## Locale: {u.locale or 'en'}; country: {u.country or 'unknown'}; "
+                      f"units: {u.units or 'metric'}. Reply in the user's language and units."]
 
     return "\n".join(lines)
 

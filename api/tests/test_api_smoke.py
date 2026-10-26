@@ -8,6 +8,7 @@ import os, sys, tempfile
 _db = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
 os.environ["DATABASE_URL"] = f"sqlite:///{_db}"
 os.environ["ENV"] = "dev"
+os.environ["LOCAL_STORAGE_DIR"] = tempfile.mkdtemp()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -49,7 +50,7 @@ test("signup creates a user and returns tokens", t_signup)
 
 
 def t_duplicate_signup():
-    r = client.post("/v1/auth/signup", json={"email": "maya@example.com", "password": "x"})
+    r = client.post("/v1/auth/signup", json={"email": "maya@example.com", "password": "another-pw"})
     ok(r.status_code == 409, f"expected 409, got {r.status_code}")
 test("duplicate email is rejected", t_duplicate_signup)
 
@@ -83,7 +84,9 @@ test("authenticated daily-look responds (empty closet → guidance)", t_daily_lo
 
 def t_cv_job_handle():
     h = {"Authorization": f"Bearer {_tokens['access']}"}
-    r = client.post("/v1/wardrobe/items", json={"s3_key_original": "uploads/x.jpg"}, headers=h)
+    from support import upload
+    key = upload(client, h)
+    r = client.post("/v1/wardrobe/items", json={"s3_key_original": key}, headers=h)
     ok(r.status_code == 202, f"CV upload should return 202, got {r.status_code}")
     ok("job_id" in r.json(), "returns a job handle")
 test("closet upload returns a 202 job handle (async CV)", t_cv_job_handle)

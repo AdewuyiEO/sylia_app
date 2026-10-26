@@ -161,6 +161,41 @@ def t_authoritative_pick_makes_sense():
 test("winning look reflects identity (no sleeveless for arm-conscious user)", t_authoritative_pick_makes_sense)
 
 
+def t_modest_coverage_excludes():
+    ctx = Context(temp_f=88, formality_signal=2)
+    tank = demo_wardrobe()[1]
+    ok(not hard_excluded(tank, ctx, demo_identity(insecurities=[])), "tank allowed by default")
+    ok(hard_excluded(tank, ctx, demo_identity(insecurities=[], coverage="modest")),
+       "modest coverage must hard-exclude a sleeveless tank")
+    shorts = Garment("b9", "bottom", "shorts", "khaki", formality_score=1, warmth_score=1)
+    ok(hard_excluded(shorts, ctx, demo_identity(coverage="modest")), "modest excludes shorts")
+test("modest coverage is a hard exclusion", t_modest_coverage_excludes)
+
+
+def t_dresses_not_crowded_out():
+    big = [Garment(f"t{i}", "top", "shirt", "white", 3, 2) for i in range(20)] +           [Garment(f"b{i}", "bottom", "trousers", "navy", 3, 2) for i in range(20)] +           [Garment("s1", "shoes", "loafer", "brown", 3, 2),
+           Garment("d1", "dress", "dress", "black", 3, 1)]
+    cands = build_candidates(big, Context(temp_f=72, formality_signal=3), demo_identity())
+    ok(any(p.category == "dress" for c in cands for p in c),
+       "a dress must still be a candidate when tops x bottoms exceed the cap")
+test("large closets still consider dresses", t_dresses_not_crowded_out)
+
+
+def t_exclusions():
+    ctx = Context(temp_f=66, formality_signal=3)
+    first = generate_daily_looks(demo_wardrobe(), demo_body(), demo_identity(), ctx, top_n=1)[0]
+    banned = first.pieces[0].id
+    again = generate_daily_looks(demo_wardrobe(), demo_body(), demo_identity(), ctx, top_n=3,
+                                 exclude_ids={banned})
+    ok(all(banned not in {g.id for g in c.pieces} for c in again), "excluded item never returned")
+    from app.domains.daily_look.scorer import look_signature
+    sig = look_signature(first.pieces)
+    fresh = generate_daily_looks(demo_wardrobe(), demo_body(), demo_identity(), ctx, top_n=3,
+                                 exclude_signatures={sig})
+    ok(all(look_signature(c.pieces) != sig for c in fresh), "already-shown look not repeated")
+test("swap exclusions: item ids and already-shown looks", t_exclusions)
+
+
 if __name__ == "__main__":
     print("\nSylia scorer\n" + "-" * 40)
     if _fails:

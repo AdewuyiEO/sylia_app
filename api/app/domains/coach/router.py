@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ...db import get_db, SessionLocal
-from ...deps import get_current_user
+from ...deps import get_current_user, require_entitled
 from ...config import get_settings
 from ...models import User, CoachConversation, CoachMessage
 from ...core import llm
@@ -33,6 +33,14 @@ def new_conversation(db: Session = Depends(get_db), user: User = Depends(get_cur
     return {"conversation_id": str(convo.id)}
 
 
+@router.get("/conversations")
+def list_conversations(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    convos = list(db.scalars(select(CoachConversation).where(CoachConversation.user_id == user.id)
+                             .order_by(CoachConversation.created_at.desc()).limit(50)))
+    return {"conversations": [{"conversation_id": str(c.id), "title": c.title,
+                               "created_at": c.created_at.isoformat()} for c in convos]}
+
+
 @router.get("/conversations/{cid}")
 def history(cid: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     convo = _owned_convo(db, user, cid)
@@ -44,12 +52,14 @@ def history(cid: str, db: Session = Depends(get_db), user: User = Depends(get_cu
 
 @router.post("/conversations/{cid}/messages")
 def send(cid: str, payload: dict, db: Session = Depends(get_db),
-         user: User = Depends(get_current_user)):
+         user: User = Depends(require_entitled)):
     """Non-streaming reply (simple clients). SSE variant below for token streaming."""
     convo = _owned_convo(db, user, cid)
     text = (payload.get("message") or "").strip()
     if not text:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Empty message")
+        raise HTTPException(422, "Empty message")
+    if len(text) > 4000:
+        raise HTTPException(422, "Message too long")
 
     db.add(CoachMessage(conversation_id=convo.id, role="user", content=text))
     db.commit()
@@ -60,20 +70,26 @@ def send(cid: str, payload: dict, db: Session = Depends(get_db),
                          model=llm.model_for('coach'), max_tokens=600, fallback=COACH_FALLBACK)
 
     db.add(CoachMessage(conversation_id=convo.id, role="assistant", content=reply))
+    if not convo.title:
+        convo.title = text[:60]
     db.commit()
     return {"conversation_id": cid, "reply": reply}
 
 
 @router.post("/conversations/{cid}/messages/stream")
 def send_stream(cid: str, payload: dict, db: Session = Depends(get_db),
-                user: User = Depends(get_current_user)):
+                user: User = Depends(require_entitled)):
     """SSE token stream. The preamble is prompt-cached so multi-turn chat is cheap."""
     convo = _owned_convo(db, user, cid)
     text = (payload.get("message") or "").strip()
     if not text:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Empty message")
+        raise HTTPException(422, "Empty message")
+    if len(text) > 4000:
+        raise HTTPException(422, "Message too long")
 
     db.add(CoachMessage(conversation_id=convo.id, role="user", content=text))
+    if not convo.title:
+        convo.title = text[:60]
     db.commit()
     system = build_context_preamble(db, user.id)
     prior = _prior_turns(db, convo.id)

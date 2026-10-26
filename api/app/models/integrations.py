@@ -1,7 +1,7 @@
 """calendar_connections, weather_cache, affiliate_recommendations (spec §2.8)."""
 import uuid
 from datetime import datetime, timezone, date
-from sqlalchemy import DateTime, Date, Uuid, ForeignKey, JSON, String, Numeric
+from sqlalchemy import DateTime, Date, Uuid, ForeignKey, JSON, String, Numeric, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column
 from ..db import Base
 
@@ -17,6 +17,7 @@ class CalendarConnection(Base):
     provider: Mapped[str] = mapped_column(String, default="google")
     access_token_encrypted: Mapped[str | None] = mapped_column(String, nullable=True)
     refresh_token_encrypted: Mapped[str | None] = mapped_column(String, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     category_mapping: Mapped[dict] = mapped_column(JSON, default=dict)  # keyword -> formality category (the 1-category signal)
 
 
@@ -33,9 +34,13 @@ class AffiliateRecommendation(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
     outfit_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("outfits.id"), nullable=True)
+    product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id"), nullable=True, index=True)
+    brand_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("brands.id"), nullable=True, index=True)
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    unlocks: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)   # new outfits it makes possible
     retailer: Mapped[str | None] = mapped_column(String, nullable=True)
     product_url: Mapped[str | None] = mapped_column(String, nullable=True)
     fit_score: Mapped[float | None] = mapped_column(Numeric, nullable=True)  # gate enforced at WRITE time
     rationale: Mapped[str | None] = mapped_column(String, nullable=True)
-    shown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    shown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=_now)
     clicked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

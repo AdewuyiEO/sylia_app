@@ -62,3 +62,75 @@ def fetch_today_events(access_token: str | None) -> list[dict]:
                 for i in r.json().get("items", [])]
     except Exception:
         return []
+
+
+# ── Google OAuth (read-only calendar) ────────────────────────────────────────
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
+CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly"
+
+
+def oauth_configured() -> bool:
+    from ...config import get_settings
+    s = get_settings()
+    return bool(s.google_client_id and s.google_client_secret)
+
+
+def redirect_uri() -> str:
+    from ...config import get_settings
+    return f"{get_settings().public_base_url}/v1/integrations/calendar/oauth/callback"
+
+
+def exchange_code(code: str) -> dict:
+    """Authorization code → {access_token, refresh_token?, expires_in}. Raises on failure."""
+    import httpx
+    from ...config import get_settings
+    s = get_settings()
+    r = httpx.post(GOOGLE_TOKEN_URL, data={
+        "code": code, "client_id": s.google_client_id, "client_secret": s.google_client_secret,
+        "redirect_uri": redirect_uri(), "grant_type": "authorization_code"}, timeout=10.0)
+    r.raise_for_status()
+    return r.json()
+
+
+def refresh_access_token(refresh_token: str) -> dict | None:
+    import httpx
+    from ...config import get_settings
+    s = get_settings()
+    try:
+        r = httpx.post(GOOGLE_TOKEN_URL, data={
+            "refresh_token": refresh_token, "client_id": s.google_client_id,
+            "client_secret": s.google_client_secret, "grant_type": "refresh_token"}, timeout=10.0)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return None
+
+
+def store_tokens(conn, tokens: dict) -> None:
+    from datetime import datetime, timezone, timedelta
+    from ...core.crypto import encrypt
+    conn.access_token_encrypted = encrypt(tokens.get("access_token"))
+    if tokens.get("refresh_token"):            # Google only sends it on first consent
+        conn.refresh_token_encrypted = encrypt(tokens["refresh_token"])
+    expires_in = tokens.get("expires_in")
+    conn.token_expires_at = (datetime.now(timezone.utc) + timedelta(seconds=int(expires_in) - 60)
+                             if expires_in else None)
+
+
+def events_for_user(db, conn) -> list[dict]:
+    """Today's events for a connection, refreshing an expired access token first."""
+    if conn is None:
+        return []
+    from datetime import datetime, timezone
+    from ...core.crypto import decrypt
+    exp = conn.token_expires_at
+    if exp is not None and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp is not None and exp <= datetime.now(timezone.utc) and conn.refresh_token_encrypted:
+        fresh = refresh_access_token(decrypt(conn.refresh_token_encrypted))
+        if fresh:
+            store_tokens(conn, fresh)
+            db.commit()
+    return fetch_today_events(decrypt(conn.access_token_encrypted))

@@ -1,0 +1,53 @@
+# Render blueprint: the Sylia API + managed Postgres.
+# Deploy: Render dashboard → New → Blueprint → pick this repo.
+# CV runs inline in the API (no separate worker/Redis needed for beta).
+# Photos need S3-compatible storage — create a Cloudflare R2 bucket and fill
+# the S3_* / AWS_* values in the dashboard (Render's disk is wiped on deploy).
+services:
+  - type: web
+    name: sylia-api
+    runtime: docker
+    rootDir: api
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: ENV
+        value: prod
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sylia-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: PUBLIC_BASE_URL          # e.g. https://sylia-api.onrender.com
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT_URL          # https://<account-id>.r2.cloudflarestorage.com
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        value: auto
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: REVENUECAT_WEBHOOK_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+databases:
+  - name: sylia-db
+    plan: basic-256mb
+    databaseName: sylia
+    user: sylia

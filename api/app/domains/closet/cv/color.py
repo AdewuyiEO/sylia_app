@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import numpy as np
 from PIL import Image
-from sklearn.cluster import KMeans
+
+try:   # worker image; the API image uses the numpy fallback below
+    from sklearn.cluster import KMeans
+except Exception:
+    KMeans = None
 
 # named palette — muted neutrals + accents the styling engine reasons about.
 # name -> RGB. Nearest-neighbour in RGB is good enough for MVP colour naming.
@@ -32,6 +36,39 @@ def _nearest_name(rgb: np.ndarray) -> str:
     return _NAMES[int(np.argmin(d))]
 
 
+def _kmeans(pixels: np.ndarray, k: int, iters: int = 20) -> tuple[np.ndarray, np.ndarray]:
+    """Plain Lloyd's k-means with deterministic k-means++ seeding. (labels, centers)"""
+    if KMeans is not None:
+        km = KMeans(n_clusters=k, n_init=4, random_state=0).fit(pixels)
+        return km.labels_, km.cluster_centers_
+    rng = np.random.default_rng(0)
+    centers = [pixels[rng.integers(len(pixels))]]
+    for _ in range(1, k):
+        d = np.min(((pixels[:, None, :] - np.array(centers)[None]) ** 2).sum(-1), axis=1)
+        centers.append(pixels[rng.choice(len(pixels), p=d / d.sum())] if d.sum() > 0 else pixels[0])
+    centers = np.array(centers)
+    for _ in range(iters):
+        labels = np.argmin(((pixels[:, None, :] - centers[None]) ** 2).sum(-1), axis=1)
+        new = np.array([pixels[labels == j].mean(axis=0) if np.any(labels == j) else centers[j]
+                        for j in range(k)])
+        if np.allclose(new, centers):
+            break
+        centers = new
+    return labels, centers
+
+
+def _drop_plain_background(rgb: np.ndarray, h: int, w: int) -> np.ndarray:
+    """No cut-out available: treat the photo's border colour as background and
+    drop pixels close to it (works for the usual garment-on-plain-surface shot)."""
+    img = rgb.reshape(h, w, 3)
+    b = max(1, min(h, w) // 20)
+    border = np.concatenate([img[:b].reshape(-1, 3), img[-b:].reshape(-1, 3),
+                             img[:, :b].reshape(-1, 3), img[:, -b:].reshape(-1, 3)])
+    bg = np.median(border, axis=0)
+    keep = np.sum((rgb - bg) ** 2, axis=1) > 40 ** 2
+    return rgb[keep] if keep.mean() >= 0.05 else rgb
+
+
 def extract_colors(img: Image.Image, k: int = 3, min_secondary_share: float = 0.18
                    ) -> tuple[str, str | None]:
     """Return (primary_color, secondary_color|None) as names.
@@ -45,7 +82,10 @@ def extract_colors(img: Image.Image, k: int = 3, min_secondary_share: float = 0.
     alpha = arr[:, :, 3].reshape(-1)
 
     mask = alpha > 32
-    pixels = rgb[mask] if mask.any() else rgb
+    if mask.all():                     # fully opaque: no cut-out was produced
+        pixels = _drop_plain_background(rgb, arr.shape[0], arr.shape[1])
+    else:
+        pixels = rgb[mask] if mask.any() else rgb
     if len(pixels) == 0:
         return "grey", None
 
@@ -58,8 +98,7 @@ def extract_colors(img: Image.Image, k: int = 3, min_secondary_share: float = 0.
     if k_eff < 1:
         return _nearest_name(pixels.mean(axis=0)), None
 
-    km = KMeans(n_clusters=k_eff, n_init=4, random_state=0).fit(pixels)
-    labels, centers = km.labels_, km.cluster_centers_
+    labels, centers = _kmeans(pixels, k_eff)
     counts = np.bincount(labels, minlength=k_eff).astype(np.float64)
     shares = counts / counts.sum()
     order = np.argsort(shares)[::-1]

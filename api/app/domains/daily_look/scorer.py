@@ -70,6 +70,7 @@ class IdentityProfile:
     activity_level: str = "desk"                               # desk | on_feet
     risk_tolerance: float = 0.3                                # 0–1
     confidence_baseline: float = 0.5                           # 0–1
+    coverage: str = "standard"                                 # standard | modest
 
 
 @dataclass
@@ -127,6 +128,13 @@ LIFESTYLE_EXCLUDE = {
     "on_feet": {"heel", "heels", "stiletto", "pump"},
 }
 
+# coverage preference (cultural/religious/personal) — a hard rule, never a nudge
+COVERAGE_EXCLUDE = {
+    "modest": {"tank", "tank top", "sleeveless", "strapless", "crop top", "cropped",
+               "shorts", "mini", "mini skirt", "mini dress", "backless", "sheer",
+               "bodycon", "low-cut"},
+}
+
 
 # ── temperature → allowed garment warmth band ────────────────────────────────
 def temp_to_warmth_band(temp_f: float) -> set[int]:
@@ -155,7 +163,7 @@ def hard_excluded(g: Garment, ctx: Context, identity: IdentityProfile) -> bool:
     if abs(g.formality_score - ctx.formality_signal) > 2:
         return True
     # lifestyle exclusions
-    excl = LIFESTYLE_EXCLUDE.get(identity.activity_level, set())
+    excl = LIFESTYLE_EXCLUDE.get(identity.activity_level, set())         | COVERAGE_EXCLUDE.get(identity.coverage, set())
     hay = {g.subcategory.lower(), *(t.lower() for t in g.tags)}
     if hay & excl:
         return True
@@ -179,29 +187,32 @@ def build_candidates(wardrobe: list[Garment], ctx: Context,
             outfit.append(by["outerwear"][0])
         return outfit
 
+    n_dress_combos = len(by["dress"]) * max(1, len(by["shoes"]))
+    separates_cap = max(cap // 2, cap - n_dress_combos)
+
     # top + bottom combinations, each shoe option considered
     for top in by["top"]:
         for bottom in by["bottom"]:
             for shoe in (by["shoes"] or [None]):
+                if len(outfits) >= separates_cap:
+                    break
                 outfit = [top, bottom]
                 if shoe:
                     outfit.append(shoe)
                 if add_outer and by["outerwear"]:
                     outfit.append(by["outerwear"][0])
                 outfits.append(outfit)
-                if len(outfits) >= cap:
-                    return outfits
     # dresses
     for dress in by["dress"]:
         for shoe in (by["shoes"] or [None]):
+            if len(outfits) >= cap:
+                return outfits
             outfit = [dress]
             if shoe:
                 outfit.append(shoe)
             if add_outer and by["outerwear"]:
                 outfit.append(by["outerwear"][0])
             outfits.append(outfit)
-            if len(outfits) >= cap:
-                return outfits
     return outfits
 
 
@@ -347,6 +358,8 @@ def generate_daily_looks(
     *,
     top_n: int = 3,
     seed: int = 0,
+    exclude_ids: Optional[set[str]] = None,
+    exclude_signatures: Optional[set[frozenset[str]]] = None,
 ) -> list[Candidate]:
     """Spec §4.3: prune → score every survivor → return the top N distinct outfits.
 
@@ -355,6 +368,8 @@ def generate_daily_looks(
     """
     recent = recent or []
     rng = random.Random(seed)
+    if exclude_ids:
+        wardrobe = [g for g in wardrobe if g.id not in exclude_ids]
     candidates = build_candidates(wardrobe, ctx, identity)
 
     scored: list[Candidate] = []
@@ -365,11 +380,10 @@ def generate_daily_looks(
     scored.sort(key=lambda c: c.breakdown.total, reverse=True)
 
     # de-duplicate by the top+bottom (or dress) signature so results are varied
-    seen: set[frozenset[str]] = set()
+    seen: set[frozenset[str]] = set(exclude_signatures or ())
     out: list[Candidate] = []
     for c in scored:
-        sig = frozenset(g.id for g in c.pieces
-                        if g.category in ("top", "bottom", "dress"))
+        sig = look_signature(c.pieces)
         if sig in seen:
             continue
         seen.add(sig)
@@ -377,3 +391,8 @@ def generate_daily_looks(
         if len(out) >= top_n:
             break
     return out
+
+
+def look_signature(pieces: list[Garment]) -> frozenset[str]:
+    """Identity of a look for de-duplication: its top+bottom, or its dress."""
+    return frozenset(g.id for g in pieces if g.category in ("top", "bottom", "dress"))

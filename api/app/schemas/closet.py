@@ -21,6 +21,7 @@ class ItemPatchIn(BaseModel):
     formality_score: int | None = None
     warmth_score: int | None = None
     tags: list[str] | None = None
+    brand: str | None = None
 
 
 class ItemOut(BaseModel):
@@ -40,7 +41,13 @@ class ItemOut(BaseModel):
     is_active: bool
     s3_key_original: str | None = None
     s3_key_processed: str | None = None
+    brand: str | None = None
+    product_id: uuid.UUID | None = None
     created_at: datetime
+    # derived, not columns
+    image_url: str | None = None
+    wear_count: int = 0
+    last_worn_at: datetime | None = None
 
 
 class ItemListOut(BaseModel):
@@ -51,3 +58,4 @@ class ItemListOut(BaseModel):
 class JobAccepted(BaseModel):
     job_id: str
     status: str
+    item_id: str | None = None

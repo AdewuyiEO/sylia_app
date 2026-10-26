@@ -43,14 +43,22 @@ def t_encrypt_nulls():
 test("encryption handles nulls and bad input safely", t_encrypt_nulls)
 
 
-def t_calendar_connect_stores_ciphertext():
+def t_calendar_oauth_stores_ciphertext():
+    from app.domains.integrations import calendar as cal
+    from app.config import get_settings
+    st = get_settings()
+    st.google_client_id, st.google_client_secret = "cid", "csecret"
+    cal.exchange_code = lambda code: {"access_token": "SECRET_TOKEN_123",
+                                      "refresh_token": "REFRESH_456", "expires_in": 3600}
     H = {"Authorization": "Bearer " + client.post(
         "/v1/auth/signup", json={"email": "harden@x.com", "password": "pw123456"}).json()["access_token"]}
-    r = client.post("/v1/integrations/calendar/connect",
-                    json={"access_token": "SECRET_TOKEN_123",
-                          "refresh_token": "REFRESH_456",
-                          "category_mapping": {"demo": 5}}, headers=H)
-    ok(r.status_code == 200, r.text)
+    start = client.get("/v1/integrations/calendar/oauth/start", headers=H)
+    ok(start.status_code == 200, start.text)
+    from urllib.parse import urlparse, parse_qs
+    state = parse_qs(urlparse(start.json()["auth_url"]).query)["state"][0]
+    cb = client.get("/v1/integrations/calendar/oauth/callback",
+                    params={"state": state, "code": "abc"}, follow_redirects=False)
+    ok(cb.status_code in (302, 307) and "status=connected" in cb.headers["location"], cb.text)
     # inspect the row directly — the stored token must be ciphertext
     db = SessionLocal()
     uid = db.scalar(select(User).where(User.email == "harden@x.com")).id
@@ -60,7 +68,14 @@ def t_calendar_connect_stores_ciphertext():
     ok(stored is not None, "token stored")
     ok("SECRET_TOKEN_123" not in stored, "plaintext token is NOT in the database")
     ok(decrypt(stored) == "SECRET_TOKEN_123", "but it decrypts back correctly")
-test("calendar connect stores OAuth tokens encrypted, not plaintext", t_calendar_connect_stores_ciphertext)
+    ok(client.get("/v1/integrations/calendar", headers=H).json()["connected"], "status shows connected")
+    # a forged state never connects anything
+    bad = client.get("/v1/integrations/calendar/oauth/callback",
+                     params={"state": "forged", "code": "abc"}, follow_redirects=False)
+    ok("status=error" in bad.headers["location"], "forged state rejected")
+    ok(client.delete("/v1/integrations/calendar", headers=H).status_code == 204, "disconnect")
+    ok(not client.get("/v1/integrations/calendar", headers=H).json()["connected"], "disconnected")
+test("calendar OAuth stores tokens encrypted; forged state rejected; disconnect", t_calendar_oauth_stores_ciphertext)
 
 
 if __name__ == "__main__":

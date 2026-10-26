@@ -11,6 +11,8 @@ bcrypt>=4.1
 cryptography>=42.0        # at-rest token encryption (Fernet)
 email-validator>=2.1
 python-multipart>=0.0.9     # file uploads
+pillow>=10.2                # image decode for the inline CV path
+numpy>=1.26                 # colour k-means (numpy fallback when sklearn is absent)
 
 # jobs / workers
 celery>=5.3
@@ -27,3 +29,4 @@ httpx>=0.27                 # weather/calendar calls
 
 # dev / test
 pytest>=8.0
+tzdata>=2024.1              # IANA zones for zoneinfo on Windows/slim images

@@ -5,11 +5,11 @@ Translates DB rows into the pure scorer's dataclasses, runs the scorer, and
 explanation. Claude never chooses; it narrates a decision the scorer made.
 """
 from __future__ import annotations
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from ...config import get_settings
 from .scorer import (
-    Garment, BodyProfile, ColorPalette, IdentityProfile, Context,
+    Garment, BodyProfile, ColorPalette, IdentityProfile, Context, WornRecord,
     generate_daily_looks, Candidate,
 )
 
@@ -56,22 +56,89 @@ def _identity_from_row(ip: Any | None) -> IdentityProfile:
         activity_level=life.get("activity_level", "desk"),
         risk_tolerance=float(traits.get("risk_tolerance", 0.3)),
         confidence_baseline=float(traits.get("confidence_baseline", 0.5)),
+        coverage=life.get("coverage") or "standard",
     )
 
 
 def build_looks(items: list[Any], body_row: Any | None, identity_row: Any | None,
-                weather: dict, calendar_signal: int, *, top_n: int = 3,
-                seed: int = 0) -> list[Candidate]:
+                context: dict, *, recent: list[WornRecord] | None = None, top_n: int = 3,
+                seed: int = 0, exclude_ids: set[str] | None = None,
+                exclude_signatures: set | None = None) -> list[Candidate]:
+    """context: {"weather": {...}, "calendar": {"formality_category": n}, "context_kind": ...}"""
     wardrobe = [_garment_from_row(i) for i in items if i.is_active]
     body = _body_from_row(body_row)
     identity = _identity_from_row(identity_row)
+    weather = context.get("weather") or {}
     ctx = Context(
         temp_f=float(weather.get("temp_f", 68)),
-        formality_signal=int(calendar_signal),
+        formality_signal=int((context.get("calendar") or {}).get("formality_category", 3)),
         precipitation=bool(weather.get("precipitation", False)),
-        context_kind=weather.get("context_kind", "work"),
+        context_kind=context.get("context_kind", "work"),
     )
-    return generate_daily_looks(wardrobe, body, identity, ctx, top_n=top_n, seed=seed)
+    return generate_daily_looks(wardrobe, body, identity, ctx, recent=recent, top_n=top_n,
+                                seed=seed, exclude_ids=exclude_ids,
+                                exclude_signatures=exclude_signatures)
+
+
+def local_today(user: Any) -> date:
+    """The user's calendar day in their own timezone (worldwide users)."""
+    tz_name = getattr(user, "timezone", None)
+    if tz_name:
+        try:
+            from zoneinfo import ZoneInfo
+            return datetime.now(ZoneInfo(tz_name)).date()
+        except Exception:
+            pass
+    return datetime.now(timezone.utc).date()
+
+
+def context_kind(day: date, formality: int, driver: str | None) -> str:
+    """Weekend unless the calendar says there's something to dress up for."""
+    if day.weekday() >= 5 and (driver is None or formality <= 3):
+        return "weekend"
+    return "work"
+
+
+def wear_stats(db, user, today: date) -> dict:
+    """North-star + closet health numbers for the You tab.
+
+    WWO = distinct days in the last 7 with a look logged as worn.
+    """
+    from sqlalchemy import select
+    from ...models import Outfit, OutfitItem, ClothingItem
+
+    worn = list(db.execute(
+        select(Outfit.outfit_date, OutfitItem.clothing_item_id)
+        .join(OutfitItem, OutfitItem.outfit_id == Outfit.id)
+        .where(Outfit.user_id == user.id, Outfit.user_feedback == "worn",
+               Outfit.outfit_date > today - timedelta(days=90))))
+    days = {d for d, _ in worn}
+    wwo = len({d for d in days if d > today - timedelta(days=7)})
+
+    streak, d = 0, today
+    if d not in days:
+        d -= timedelta(days=1)          # today not logged yet doesn't break a streak
+    while d in days:
+        streak += 1
+        d -= timedelta(days=1)
+
+    active = list(db.scalars(select(ClothingItem).where(
+        ClothingItem.user_id == user.id, ClothingItem.is_active == True)))  # noqa: E712
+    worn_30 = {iid for dd, iid in worn if dd > today - timedelta(days=30)}
+    counts: dict = {}
+    for _, iid in worn:
+        counts[iid] = counts.get(iid, 0) + 1
+    by_id = {i.id: i for i in active}
+    top = sorted(((n, iid) for iid, n in counts.items() if iid in by_id), reverse=True)[:5]
+    return {
+        "weekly_worn_outfits": wwo,
+        "streak_days": streak,
+        "closet_size": len(active),
+        "closet_utilization_30d": round(len(worn_30 & set(by_id)) / len(active), 2) if active else 0.0,
+        "never_worn": sum(1 for i in active if i.id not in counts),
+        "most_worn": [{"item_id": str(iid), "subcategory": by_id[iid].subcategory,
+                       "primary_color": by_id[iid].primary_color, "times_worn": n} for n, iid in top],
+    }
 
 
 def explain(breakdown: dict, *, context: dict | None = None, pieces: list | None = None) -> str:
@@ -95,7 +162,7 @@ def explain(breakdown: dict, *, context: dict | None = None, pieces: list | None
         "Explain the pick in plain language grounded in those numbers. Never "
         "invent facts not implied by the scores. No more than 25 words. No emoji."
     )
-    facts = {"breakdown": breakdown, "context": context or {},
+    facts = {"breakdown": breakdown, "context": _explain_context(context),
              "pieces": [getattr(p, "subcategory", str(p)) for p in (pieces or [])]}
     import json
     user = ("Write the explanation for this look.\n" + json.dumps(facts))
@@ -116,3 +183,14 @@ def _template_explain(breakdown: dict) -> str:
     body_part = "and works with your fit rules" if breakdown.get("body", 0) >= 70 else ""
     lead = ", ".join(parts) if parts else "a balanced pick from your closet"
     return f"This look {lead} {body_part}".strip().rstrip(",") + "."
+
+
+def _explain_context(context: dict | None) -> dict:
+    """Only the facts the explanation may mention (no tokens, ids or raw payloads)."""
+    if not context:
+        return {}
+    w = context.get("weather") or {}
+    cal = context.get("calendar") or {}
+    return {"temp_c": w.get("temp_c"), "temp_f": w.get("temp_f"),
+            "precipitation": w.get("precipitation"), "occasion": cal.get("driver"),
+            "formality": cal.get("formality_category"), "day": context.get("context_kind")}

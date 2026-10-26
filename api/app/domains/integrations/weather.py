@@ -3,7 +3,7 @@
 Fetches today's forecast for a lat/lon, caches it in `weather_cache` (keyed by a
 coarse location + date) so we hit the API at most a few times per location per
 day, and normalises to the exact shape the scorer's Context wants:
-{temp_f, precipitation, context_kind}. Degrades to a sensible seasonal default
+{temp_f, temp_c, precipitation, condition}. Degrades to a sensible seasonal default
 if no API key is set or the call fails — the daily look must never hard-fail on
 a weather outage.
 """
@@ -24,8 +24,12 @@ def _location_key(lat: float, lon: float) -> str:
     return f"{round(lat, 1)},{round(lon, 1)}"
 
 
+def _f_to_c(f: float) -> int:
+    return round((f - 32) * 5 / 9)
+
+
 def _default_weather() -> dict:
-    return {"temp_f": 68, "precipitation": False, "context_kind": "work",
+    return {"temp_f": 68, "temp_c": 20, "precipitation": False, "condition": None,
             "source": "default"}
 
 
@@ -36,8 +40,9 @@ def _normalise(owm: dict) -> dict:
         weather_list = owm.get("weather", [])
         main = (weather_list[0]["main"].lower() if weather_list else "")
         precip = main in {"rain", "drizzle", "thunderstorm", "snow"}
-        return {"temp_f": round(float(temp_f)), "precipitation": bool(precip),
-                "context_kind": "work", "source": "openweathermap"}
+        return {"temp_f": round(float(temp_f)), "temp_c": _f_to_c(float(temp_f)),
+                "precipitation": bool(precip), "condition": main or None,
+                "source": "openweathermap"}
     except Exception:
         return _default_weather()
 

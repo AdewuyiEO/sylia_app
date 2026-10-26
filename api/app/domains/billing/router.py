@@ -1,45 +1,43 @@
-"""Integrations & Billing (spec §3.7). Stripe webhook is the source of truth."""
-from fastapi import APIRouter, Depends, Request
+"""Billing (spec §3.7). Store/Stripe webhooks are the source of truth."""
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from ...db import get_db
 from ...deps import get_current_user
-from ...models import User
+from ...models import User, Subscription
+from . import service
 
-router = APIRouter(prefix="/v1", tags=["billing"])
-
-
-@router.get("/integrations/weather/today")
-def weather_today(lat: float | None = None, lon: float | None = None,
-                  db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    from ..integrations.weather import get_today_weather
-    return get_today_weather(db, lat, lon)
+router = APIRouter(prefix="/v1/billing", tags=["billing"])
 
 
-@router.get("/integrations/calendar/today-signal")
-def calendar_signal(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    from ..integrations.calendar import formality_from_events, fetch_today_events
-    from ...models import CalendarConnection
-    from sqlalchemy import select
-    cal = db.scalar(select(CalendarConnection).where(CalendarConnection.user_id == user.id))
-    from ...core.crypto import decrypt
-    events = fetch_today_events(decrypt(cal.access_token_encrypted)) if cal else []
-    return formality_from_events(events, cal.category_mapping if cal else None)
+def _sub(db: Session, user_id) -> Subscription:
+    sub = db.scalar(select(Subscription).where(Subscription.user_id == user_id))
+    if sub is None:
+        sub = Subscription(user_id=user_id)
+        db.add(sub)
+    return sub
 
 
-@router.post("/billing/checkout-session")
-def checkout(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    from ..billing.service import create_checkout_session
-    return create_checkout_session(user.email, str(user.id))
+@router.get("/status")
+def billing_status(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    sub = db.scalar(select(Subscription).where(Subscription.user_id == user.id))
+    return service.status_for(user, sub)
 
 
-@router.post("/billing/webhook")
-async def webhook(request: Request, db: Session = Depends(get_db)):
-    """Stripe is the source of truth. Verify signature, then reconcile the user's
-    subscription_status from the event."""
-    from ..billing.service import verify_webhook
-    from sqlalchemy import select
+@router.post("/checkout-session")
+def checkout(user: User = Depends(get_current_user)):
+    """Web only. The iOS/Android apps buy through the store SDK (RevenueCat)."""
+    return service.create_checkout_session(user.email, str(user.id))
+
+
+@router.post("/webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
+    """Stripe (web). Verify signature, then reconcile subscription_status."""
     raw = await request.body()
-    event = verify_webhook(raw, request.headers.get("stripe-signature"))
+    event = service.verify_webhook(raw, request.headers.get("stripe-signature"))
     if event is None:
         return {"received": True, "verified": False}
 
@@ -47,51 +45,44 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     obj = event.get("data", {}).get("object", {})
     user_id = (obj.get("metadata") or {}).get("user_id")
     if user_id:
-        u = db.get(User, __import__("uuid").UUID(user_id))
+        u = db.get(User, uuid.UUID(user_id))
         if u:
+            sub = _sub(db, u.id)
+            sub.provider = "stripe"
             if etype in ("customer.subscription.created", "customer.subscription.updated",
                          "checkout.session.completed"):
-                u.subscription_status = "active"
-            elif etype in ("customer.subscription.deleted",):
-                u.subscription_status = "canceled"
+                u.subscription_status = sub.status = "active"
+                if obj.get("current_period_end"):
+                    from datetime import datetime, timezone
+                    sub.current_period_end = datetime.fromtimestamp(obj["current_period_end"], timezone.utc)
+                sub.stripe_customer_id = obj.get("customer") or sub.stripe_customer_id
+            elif etype == "customer.subscription.deleted":
+                u.subscription_status = sub.status = "canceled"
             elif etype == "invoice.payment_failed":
-                u.subscription_status = "past_due"
+                u.subscription_status = sub.status = "past_due"
             db.commit()
     return {"received": True, "verified": True}
 
 
-@router.get("/billing/status")
-def status(user: User = Depends(get_current_user)):
-    from ..billing.service import status_for
-    return status_for(user)
-
-
-@router.get("/affiliate/recommendations")
-def affiliate(outfit_id: str | None = None, db: Session = Depends(get_db),
-              user: User = Depends(get_current_user)):
-    """Fit-gated: only products clearing the fit threshold are ever returned.
-    (Candidate sourcing is a later build; the gate + shape are enforced now.)"""
-    from ..billing.service import gate_affiliate
-    candidates: list[dict] = []   # populated by the gap-analysis/retailer sourcing step
-    return {"recommendations": gate_affiliate(candidates),
-            "disclosure": "Sylia may earn a commission on purchases."}
-
-
-@router.post("/integrations/calendar/connect")
-def connect_calendar(payload: dict, db: Session = Depends(get_db),
-                     user: User = Depends(get_current_user)):
-    """Store Google OAuth tokens ENCRYPTED at rest (hardening). Client sends the
-    tokens obtained from the OAuth flow; we never persist them in plaintext."""
-    from ...core.crypto import encrypt
-    from ...models import CalendarConnection
-    from sqlalchemy import select
-    conn = db.scalar(select(CalendarConnection).where(CalendarConnection.user_id == user.id))
-    if conn is None:
-        conn = CalendarConnection(user_id=user.id, provider="google")
-        db.add(conn)
-    conn.access_token_encrypted = encrypt(payload.get("access_token"))
-    conn.refresh_token_encrypted = encrypt(payload.get("refresh_token"))
-    if "category_mapping" in payload:
-        conn.category_mapping = payload["category_mapping"]
+@router.post("/revenuecat/webhook")
+async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
+    """App Store / Play Store purchases, via RevenueCat. The app identifies the
+    buyer with our user id (Purchases.logIn(user_id)), so app_user_id is our id."""
+    if not service.revenuecat_authorized(request.headers.get("authorization")):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Bad webhook authorization")
+    event = (await request.json()).get("event") or {}
+    candidates = [event.get("app_user_id"), event.get("original_app_user_id"),
+                  *(event.get("aliases") or [])]
+    user = None
+    for cid in candidates:
+        try:
+            user = db.get(User, uuid.UUID(str(cid)))
+        except (ValueError, TypeError):
+            continue
+        if user:
+            break
+    if user is None:
+        return {"received": True, "applied": False, "reason": "unknown user"}
+    applied = service.apply_revenuecat_event(event, user, _sub(db, user.id))
     db.commit()
-    return {"connected": True, "provider": "google"}
+    return {"received": True, "applied": applied}

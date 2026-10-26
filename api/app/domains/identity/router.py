@@ -15,33 +15,45 @@ from sqlalchemy.orm import Session
 from ...db import get_db
 from ...deps import get_current_user
 from ...models import User, IdentityProfile
+from ...core.kv import kv
 from .schema import Extraction, OPENING, next_question
 from .extractor import get_extractor
 
 router = APIRouter(prefix="/v1", tags=["identity"])
 
-# short-lived session store (onboarding lasts a handful of turns).
-# swap for Redis in prod; in-memory is fine for a single-process dev/test run.
-_SESSIONS: dict[str, dict] = {}
+# onboarding sessions live in the shared KV store (Redis in prod) so any API
+# instance can serve the next turn; they expire if abandoned.
+_SESSION_TTL = 2 * 3600
+
+
+def _load(sid: str) -> dict | None:
+    raw = kv.get(f"onboarding:{sid}")
+    if raw is None:
+        return None
+    return {**raw, "extraction": Extraction(**raw["extraction"])}
+
+
+def _save(sid: str, sess: dict) -> None:
+    kv.set(f"onboarding:{sid}", {**sess, "extraction": sess["extraction"].as_dict()}, ttl=_SESSION_TTL)
 
 
 @router.post("/onboarding/sessions", status_code=201)
 def start_session(user: User = Depends(get_current_user)):
     sid = str(uuid.uuid4())
-    _SESSIONS[sid] = {"user_id": str(user.id), "extraction": Extraction(), "turns": 0}
+    _save(sid, {"user_id": str(user.id), "extraction": Extraction(), "turns": 0})
     return {"session_id": sid, "question": OPENING, "complete": False}
 
 
 @router.post("/onboarding/sessions/{sid}/messages")
 def turn(sid: str, payload: dict, db: Session = Depends(get_db),
          user: User = Depends(get_current_user)):
-    sess = _SESSIONS.get(sid)
+    sess = _load(sid)
     if not sess or sess["user_id"] != str(user.id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session not found")
 
     message = (payload.get("message") or "").strip()
     if not message:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Empty message")
+        raise HTTPException(422, "Empty message")
 
     extractor = get_extractor()
     revealed = extractor.extract(message, sess["extraction"])
@@ -49,6 +61,7 @@ def turn(sid: str, payload: dict, db: Session = Depends(get_db),
     sess["extraction"] = merged
     sess["turns"] += 1
 
+    _save(sid, sess)
     q = next_question(merged)
     # complete as soon as the REQUIRED fields are in. next_question may still
     # offer optional refinements (insecurities/risk), but those never block
@@ -58,7 +71,7 @@ def turn(sid: str, payload: dict, db: Session = Depends(get_db),
 
     if complete:
         _persist(db, user, merged)
-        _SESSIONS.pop(sid, None)
+        kv.delete(f"onboarding:{sid}")
         return {"session_id": sid, "complete": True, "question": None,
                 "extracted": merged.as_dict(),
                 "message": "Got it — your style profile is set. You can refine it anytime."}
@@ -86,9 +99,15 @@ def patch_profile(payload: dict, db: Session = Depends(get_db),
     if ip is None:
         ip = IdentityProfile(user_id=user.id)
         db.add(ip)
-    for field in ("style_aspirations", "insecurities", "lifestyle_patterns", "psychological_traits"):
+    for field, kind in (("style_aspirations", list), ("insecurities", list),
+                        ("lifestyle_patterns", dict), ("psychological_traits", dict)):
         if field in payload:
+            if not isinstance(payload[field], kind):
+                raise HTTPException(422, f"{field} must be a {kind.__name__}")
             setattr(ip, field, payload[field])
+    coverage = (ip.lifestyle_patterns or {}).get("coverage")
+    if coverage not in (None, "standard", "modest"):
+        raise HTTPException(422, "coverage must be standard or modest")
     db.commit()
     return {"updated": True}
 

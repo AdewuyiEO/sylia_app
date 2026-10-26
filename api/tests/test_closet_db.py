@@ -16,19 +16,12 @@ from PIL import Image  # noqa: E402
 import numpy as np  # noqa: E402
 
 
-def _seed_image(key: str, rgb=(44, 54, 72)):
-    """Write a real garment PNG to storage so the upload endpoint's CV pipeline
-    (rembg + k-means colour, real; CLIP degrades without torch) has an image."""
-    p = os.path.join(_storage_dir, key)
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    arr = np.full((80, 80, 3), 255, np.uint8)
-    arr[20:60, 20:60] = rgb
-    Image.fromarray(arr).save(p)
-
 from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 from app.db import engine  # noqa: E402
 from app.models import Base  # noqa: E402
+
+from support import upload, png_bytes  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
 client = TestClient(app)
@@ -50,8 +43,8 @@ _ctx = {}
 
 
 def t_upload_creates_row_and_persists():
-    _seed_image("uploads/shirt.jpg", rgb=(44, 54, 72))
-    r = client.post("/v1/wardrobe/items", json={"s3_key_original": "uploads/shirt.jpg"}, headers=H)
+    key = upload(client, H, data=png_bytes((44, 54, 72)))
+    r = client.post("/v1/wardrobe/items", json={"s3_key_original": key}, headers=H)
     ok(r.status_code == 202, r.text)
     ok("job_id" in r.json())
     # eager worker ran inline → the row should now be classified
@@ -62,13 +55,16 @@ def t_upload_creates_row_and_persists():
     ok(item["s3_key_processed"] and "cutouts/" in item["s3_key_processed"], "bg-removed key persisted")
     ok(item["primary_color"] is not None, "colour persisted by worker")
     ok(item["classification_confidence"] is not None, "confidence flipped from NULL (processing) to a value")
+    ok(item["image_url"], "item carries a signed image URL")
+    img = client.get(item["image_url"])
+    ok(img.status_code == 200 and img.content[1:4] == b"PNG", "image URL serves the cut-out")
 test("upload creates a row and the worker persists classification", t_upload_creates_row_and_persists)
 
 
 def t_list_filters_by_category():
     # add a bottom by uploading again then patching its category
-    _seed_image("uploads/jeans.jpg", rgb=(60, 90, 130))
-    r = client.post("/v1/wardrobe/items", json={"s3_key_original": "uploads/jeans.jpg"}, headers=H)
+    key = upload(client, H, data=png_bytes((60, 90, 130)))
+    r = client.post("/v1/wardrobe/items", json={"s3_key_original": key}, headers=H)
     ok(r.status_code == 202)
     lst = client.get("/v1/wardrobe/items", headers=H).json()
     ok(lst["count"] == 2, f"expected 2, got {lst['count']}")
@@ -123,6 +119,10 @@ def t_ownership_isolation():
     ok(lst["count"] == 0, "second user sees an empty closet")
     r = client.get(f"/v1/wardrobe/items/{_ctx['id']}", headers=H2)
     ok(r.status_code == 404, "second user cannot fetch first user's item")
+    # nor register the first user's photo as their own
+    key = upload(client, H)
+    r = client.post("/v1/wardrobe/items", json={"s3_key_original": key}, headers=H2)
+    ok(r.status_code == 422, f"foreign upload key must be rejected, got {r.status_code}")
 test("items are isolated per user (ownership enforced)", t_ownership_isolation)
 
 
