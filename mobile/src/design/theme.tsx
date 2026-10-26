@@ -1,18 +1,15 @@
 /**
- * Theme provider. Exposes the active colour set (light/dark) plus the static
- * token groups. Every component reads colours through useTheme() so dark mode
- * is free and `signal` can swap to its dark-safe variant.
+ * Theme provider. Exposes the active colour set (Olive Grove light / Earth Riches
+ * dark) plus the static token groups. Every component reads colours through
+ * useTheme(), so dark mode is a token swap.
  */
-
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import { useColorScheme } from 'react-native';
-import { color, type, space, layout, radius, motion, component } from './tokens';
+import { color, type, space, layout, radius, motion } from './tokens';
 
-// Widen the literal hex types so light and dark are the same shape (both are
-// { paper: string, chalk: string, ... }) and `color[scheme]` type-checks.
-type ColorSet = { [K in keyof typeof color.light]: string };
+export type ColorSet = { [K in keyof typeof color.light]: string };
 
-interface Theme {
+export interface Theme {
   c: ColorSet;
   scheme: 'light' | 'dark';
   type: typeof type;
@@ -20,23 +17,16 @@ interface Theme {
   layout: typeof layout;
   radius: typeof radius;
   motion: typeof motion;
-  component: typeof component;
 }
 
 const ThemeContext = createContext<Theme | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
-  const theme: Theme = {
-    c: color[scheme],
-    scheme,
-    type,
-    space,
-    layout,
-    radius,
-    motion,
-    component,
-  };
+  const theme = useMemo<Theme>(
+    () => ({ c: color[scheme], scheme, type, space, layout, radius, motion }),
+    [scheme],
+  );
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 

@@ -98,12 +98,35 @@ def analyze(product: Garment, wardrobe: list[Garment], body: BodyProfile,
                      duplicate_of=dup, contexts=good_contexts)
 
 
-def rationale(result: GapResult) -> str:
+_COPY = {
+    "en": {"none": "Doesn't pair well with your closet yet.",
+           "main": "Pairs with {pieces} piece{ps} you own — {looks} new look{ls}",
+           "work": "work", "weekend": "weekends", "cold": "cold days", "hot": "hot days", "and": "and", "for": "for"},
+    "fr": {"none": "Ne s'accorde pas encore avec votre dressing.",
+           "main": "S'accorde avec {pieces} pièce{ps} de votre dressing — {looks} nouvelle{ls} tenue{ls}",
+           "work": "le travail", "weekend": "le week-end", "cold": "les jours froids", "hot": "les jours chauds",
+           "and": "et", "for": "pour"},
+    "es": {"none": "Aún no combina bien con tu armario.",
+           "main": "Combina con {pieces} prenda{ps} que tienes — {looks} look{ls} nuevo{ls}",
+           "work": "el trabajo", "weekend": "el fin de semana", "cold": "días fríos", "hot": "días de calor",
+           "and": "y", "for": "para"},
+}
+
+
+def rationale(result: GapResult, locale: str | None = None) -> str:
     """Template copy grounded in the analysis numbers (no LLM needed)."""
+    cp = _COPY.get((locale or "en").split("-")[0].lower(), _COPY["en"])
     if result.unlocks == 0:
-        return "Doesn't pair well with your closet yet."
-    pieces = len(result.pairs_with)
-    looks = result.unlocks
-    when = " and ".join(result.contexts[:2]) if result.contexts else ""
-    s = f"Pairs with {pieces} piece{'s' if pieces != 1 else ''} you own — {looks} new look{'s' if looks != 1 else ''}"
-    return s + (f" for {when} days." if when else ".")
+        return cp["none"]
+    pieces, looks = len(result.pairs_with), result.unlocks
+    s = cp["main"].format(pieces=pieces, ps="s" if pieces != 1 else "", looks=looks, ls="s" if looks != 1 else "")
+    kinds = []
+    for label in result.contexts:                      # e.g. "work, mild"
+        kind, temp = [x.strip() for x in label.split(",")]
+        for k in (kind, temp):
+            if k in ("work", "weekend", "cold", "hot") and cp[k] not in kinds:
+                kinds.append(cp[k])
+    if not kinds:
+        return s + "."
+    when = kinds[0] if len(kinds) == 1 else f"{', '.join(kinds[:-1])} {cp['and']} {kinds[-1]}"
+    return f"{s} {cp['for']} {when}."

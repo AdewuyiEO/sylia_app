@@ -1,18 +1,24 @@
 /**
  * Typed API surface. One function per backend endpoint, grouped by domain.
- * Screens call these — they never touch fetch or URLs directly.
+ * Screens never call these directly — they go through the hooks in src/state.
  */
-import { http, tokens } from './client';
+import { http, tokens, putFile } from './client';
 import { ROUTES } from './config';
 
-// ── shapes returned by the backend (mirrors the FastAPI responses) ──────────
-export interface TokenPair {
-  access_token: string;
-  refresh_token: string;
+// ── shapes (mirror the FastAPI responses) ───────────────────────────────────
+export interface TokenPair { access_token: string; refresh_token: string }
+export interface Region { locale?: string; country?: string | null; timezone?: string | null; units?: 'metric' | 'imperial' }
+
+export interface Me {
+  id: string; email: string; display_name: string | null; auth_provider: string;
+  locale: string; country: string | null; units: 'metric' | 'imperial'; timezone: string | null;
 }
+
+export type Category = 'top' | 'bottom' | 'dress' | 'outerwear' | 'shoes' | 'accessory';
+
 export interface ApiItem {
   id: string;
-  category: string;
+  category: Category;
   subcategory: string | null;
   primary_color: string | null;
   secondary_color: string | null;
@@ -22,128 +28,201 @@ export interface ApiItem {
   warmth_score: number | null;
   classification_confidence: number | null;
   tags: string[];
+  brand: string | null;
   is_active: boolean;
-  s3_key_processed: string | null;
-}
-export interface ApiLook {
-  items: { id: string; category: string; subcategory: string; primary_color: string }[];
-  score_total: number;
-  score_breakdown: { context: number; color: number; body: number; identity: number };
-  explanation: string;
-}
-export interface DailyLookResponse {
-  context?: { weather: any; calendar: any };
-  looks: ApiLook[];
-  reason?: string;
+  image_url: string | null;
+  wear_count: number;
+  last_worn_at: string | null;
+  created_at: string;
 }
 
-// ── auth ────────────────────────────────────────────────────────────────────
+export interface Breakdown { context: number; color: number; body: number; identity: number }
+
+export interface ApiLook {
+  id: string;
+  rank: number;
+  date: string;
+  items: ApiItem[];
+  score_total: number;
+  score_breakdown: Breakdown;
+  explanation: string;
+  user_feedback: 'pending' | 'worn' | 'skipped' | 'loved' | 'disliked';
+  worn_at: string | null;
+}
+
+export interface LookContext {
+  weather?: { temp_c?: number; temp_f?: number; precipitation?: boolean; condition?: string | null };
+  calendar?: { formality_category: number; driver: string | null };
+  context_kind?: 'work' | 'weekend';
+}
+
+export interface DailyLookResponse { date: string; context?: LookContext; looks: ApiLook[]; reason?: string }
+
+export interface Stats {
+  weekly_worn_outfits: number;
+  streak_days: number;
+  closet_size: number;
+  closet_utilization_30d: number;
+  never_worn: number;
+  most_worn: { item_id: string; subcategory: string | null; primary_color: string | null; times_worn: number }[];
+}
+
+export interface BodyProfile {
+  exists: boolean;
+  silhouette_category?: string | null;
+  skin_undertone?: string | null;
+  color_palette?: { best_colors?: string[]; avoid_colors?: string[]; neutrals?: string[] };
+  fit_rules?: string[];
+  analysis_method?: string | null;
+}
+
+export interface Job<T = unknown> { job_id: string; status: 'queued' | 'processing' | 'done' | 'failed' | string; result: T | null; error?: string | null }
+
+export interface BodyScanResult {
+  silhouette_category: string | null; silhouette_confidence: number;
+  skin_undertone: string | null; undertone_confidence: number; needs_confirmation: boolean;
+}
+
+export interface Recommendation {
+  recommendation_id: string;
+  product_id: string;
+  title: string;
+  brand: { name: string; slug: string; logo_url: string | null };
+  category: Category;
+  subcategory: string | null;
+  primary_color: string | null;
+  image_url: string | null;
+  price: { country?: string; currency: string; amount_minor: number } | null;
+  sizes: string[];
+  fit_score: number;
+  unlocks: number;
+  pairs_with: string[];
+  rationale: string;
+}
+
+export interface BillingStatus {
+  status: string; entitled: boolean; in_trial: boolean; trial_ends_at: string | null;
+  renews_or_expires_at: string | null; provider: string | null; price_usd: number;
+}
+
+export interface IdentityProfile {
+  exists: boolean;
+  aspirations?: { label: string; priority: number }[];
+  insecurities?: { area: string }[];
+  lifestyle_patterns?: { activity_level?: string; work_setting?: string | null; coverage?: 'standard' | 'modest' };
+  psychological_traits?: Record<string, number>;
+  completed?: boolean;
+}
+
+// ── auth + account ──────────────────────────────────────────────────────────
 export const auth = {
-  async signup(email: string, password: string) {
-    const t = await http.post<TokenPair>(ROUTES.signup, { email, password }, false);
-    tokens.set(t.access_token, t.refresh_token);
-    return t;
+  async signup(email: string, password: string, region: Region) {
+    const t = await http.post<TokenPair>(ROUTES.signup, { email, password, ...region }, false);
+    await tokens.set(t.access_token, t.refresh_token);
   },
   async login(email: string, password: string) {
     const t = await http.post<TokenPair>(ROUTES.login, { email, password }, false);
-    tokens.set(t.access_token, t.refresh_token);
-    return t;
+    await tokens.set(t.access_token, t.refresh_token);
   },
-  logout() {
-    tokens.clear();
+  async apple(identityToken: string, displayName: string | null, region: Region) {
+    const t = await http.post<TokenPair>(ROUTES.apple, { identity_token: identityToken, display_name: displayName, ...region }, false);
+    await tokens.set(t.access_token, t.refresh_token);
   },
-  get isAuthed() {
-    return tokens.isAuthed;
+  async logout() {
+    const refresh = tokens.refresh;
+    if (refresh) await http.post(ROUTES.logout, { refresh_token: refresh }, false).catch(() => {});
+    await tokens.clear();
   },
 };
 
-// ── daily look ────────────────────────────────────────────────────────────────
+export const account = {
+  me: () => http.get<Me>(ROUTES.me),
+  update: (patch: Partial<Pick<Me, 'display_name' | 'locale' | 'country' | 'units' | 'timezone'>>) =>
+    http.patch<Me>(ROUTES.me, patch),
+  export: () => http.get<Record<string, unknown>>(ROUTES.meExport),
+  delete: () => http.del<void>(ROUTES.me),
+};
+
+// ── uploads ─────────────────────────────────────────────────────────────────
+export async function uploadPhoto(localUri: string, purpose: 'closet' | 'body', contentType = 'image/jpeg') {
+  const r = await http.post<{ key: string; upload: { url: string; method: string; headers: Record<string, string> } }>(
+    ROUTES.uploads, { purpose, content_type: contentType });
+  await putFile(r.upload.url, localUri, r.upload.headers);
+  return r.key;
+}
+
+// ── daily look ──────────────────────────────────────────────────────────────
 export const dailyLook = {
-  get(coords?: { lat: number; lon: number }) {
-    const q = coords ? `?lat=${coords.lat}&lon=${coords.lon}` : '';
+  get(coords?: { lat: number; lon: number } | null) {
+    const q = coords ? `?lat=${coords.lat.toFixed(2)}&lon=${coords.lon.toFixed(2)}` : '';
     return http.get<DailyLookResponse>(`${ROUTES.dailyLook}${q}`);
   },
-  feedback(outfitId: string, feedback: 'worn' | 'skipped' | 'loved' | 'disliked') {
-    return http.post(`${ROUTES.dailyLook}/${outfitId}/feedback`, { feedback });
+  feedback(id: string, feedback: ApiLook['user_feedback'], note?: string) {
+    return http.post<{ user_feedback: string; worn_at: string | null }>(ROUTES.lookFeedback(id), { feedback, note });
   },
+  regenerate(id: string, excludeItemId?: string) {
+    return http.post<ApiLook>(ROUTES.lookRegenerate(id), excludeItemId ? { exclude_item_id: excludeItemId } : {});
+  },
+  history: (days = 30) => http.get<{ looks: ApiLook[] }>(`${ROUTES.lookHistory}?days=${days}`),
+  stats: () => http.get<Stats>(ROUTES.stats),
 };
 
-// ── closet ────────────────────────────────────────────────────────────────────
+// ── closet ──────────────────────────────────────────────────────────────────
 export const closet = {
-  list(category?: string) {
-    const q = category ? `?category=${category}` : '';
-    return http.get<{ items: ApiItem[]; count: number }>(`${ROUTES.items}${q}`);
-  },
-  /** register an uploaded image key → returns a job handle (CV runs async) */
-  upload(s3KeyOriginal: string) {
-    return http.post<{ job_id: string; status: string }>(ROUTES.items, {
-      s3_key_original: s3KeyOriginal,
-    });
-  },
-  jobStatus(jobId: string) {
-    return http.get<{ status: string; result: unknown }>(ROUTES.itemJob(jobId));
-  },
-  correct(id: string, patch: Partial<ApiItem>) {
-    return http.patch<ApiItem>(ROUTES.item(id), patch);
-  },
-  remove(id: string) {
-    return http.del(ROUTES.item(id));
-  },
+  list: (category?: Category) =>
+    http.get<{ items: ApiItem[]; count: number }>(`${ROUTES.items}${category ? `?category=${category}` : ''}`),
+  get: (id: string) => http.get<ApiItem>(ROUTES.item(id)),
+  register: (key: string) => http.post<{ job_id: string; status: string; item_id: string }>(ROUTES.items, { s3_key_original: key }),
+  job: (jobId: string) => http.get<Job>(ROUTES.itemJob(jobId)),
+  correct: (id: string, patch: Partial<Pick<ApiItem, 'category' | 'subcategory' | 'primary_color' | 'formality_score' | 'warmth_score' | 'brand' | 'tags'>>) =>
+    http.patch<ApiItem>(ROUTES.item(id), patch),
+  remove: (id: string) => http.del<void>(ROUTES.item(id)),
+  fromProduct: (productId: string, size?: string) =>
+    http.post<ApiItem>(ROUTES.itemFromProduct, { product_id: productId, size }),
 };
 
-// ── body profile ──────────────────────────────────────────────────────────────
+// ── body ────────────────────────────────────────────────────────────────────
 export const body = {
-  scan(s3Keys: string[]) {
-    return http.post<{ job_id: string; status: string }>(ROUTES.bodyScan, { s3_keys: s3Keys });
-  },
-  quiz(undertone: string, silhouette: string) {
-    return http.post(ROUTES.quizFallback, { undertone, silhouette });
-  },
-  get() {
-    return http.get(ROUTES.bodyProfile);
-  },
+  scan: (keys: string[]) => http.post<{ job_id: string }>(ROUTES.bodyScan, { s3_keys: keys, consent: true }),
+  job: (jobId: string) => http.get<Job<BodyScanResult>>(ROUTES.bodyScanJob(jobId)),
+  quiz: (undertone: string, silhouette: string) => http.post(ROUTES.quizFallback, { undertone, silhouette }),
+  get: () => http.get<BodyProfile>(ROUTES.bodyProfile),
+  delete: () => http.del<void>(ROUTES.bodyProfile),
 };
 
-// ── identity onboarding ───────────────────────────────────────────────────────
+// ── identity ────────────────────────────────────────────────────────────────
 export const identity = {
-  start() {
-    return http.post<{ session_id: string; question: string; complete: boolean }>(
-      ROUTES.onboardingStart,
-    );
-  },
-  say(sessionId: string, message: string) {
-    return http.post<{
-      complete: boolean;
-      question: string | null;
-      extracted: Record<string, unknown>;
-    }>(ROUTES.onboardingTurn(sessionId), { message });
-  },
-  profile() {
-    return http.get(ROUTES.identityProfile);
-  },
+  start: () => http.post<{ session_id: string; question: string; complete: boolean }>(ROUTES.onboardingStart),
+  say: (sid: string, message: string) =>
+    http.post<{ complete: boolean; question: string | null; message?: string }>(ROUTES.onboardingTurn(sid), { message }),
+  profile: () => http.get<IdentityProfile>(ROUTES.identityProfile),
+  update: (patch: Partial<Pick<IdentityProfile, 'lifestyle_patterns'>>) => http.patch(ROUTES.identityProfile, patch),
 };
 
-// ── style coach ───────────────────────────────────────────────────────────────
+// ── coach ───────────────────────────────────────────────────────────────────
 export const coach = {
-  newConversation() {
-    return http.post<{ conversation_id: string }>(ROUTES.coachConversations);
-  },
-  send(cid: string, message: string) {
-    return http.post<{ reply: string }>(ROUTES.coachMessages(cid), { message });
-  },
-  /** SSE streaming — see streamCoach() in ./stream for token-by-token UI */
+  newConversation: () => http.post<{ conversation_id: string }>(ROUTES.coachConversations),
+  history: (cid: string) => http.get<{ messages: { role: 'user' | 'assistant'; content: string }[] }>(ROUTES.coachConversation(cid)),
+  send: (cid: string, message: string) => http.post<{ reply: string }>(ROUTES.coachMessages(cid), { message }),
 };
 
-// ── billing ───────────────────────────────────────────────────────────────────
+// ── discover ────────────────────────────────────────────────────────────────
+export const discover = {
+  list: (category?: Category) =>
+    http.get<{ recommendations: Recommendation[]; disclosure: string; reason?: string }>(
+      `${ROUTES.discover}${category ? `?category=${category}` : ''}`),
+  click: (rid: string) => http.post<{ url: string }>(ROUTES.discoverClick(rid)),
+};
+
+// ── integrations + billing ──────────────────────────────────────────────────
+export const calendar = {
+  status: () => http.get<{ connected: boolean; available: boolean }>(ROUTES.calendar),
+  start: () => http.get<{ auth_url: string; return_url: string }>(ROUTES.calendarStart),
+  disconnect: () => http.del<void>(ROUTES.calendar),
+};
+
 export const billing = {
-  status() {
-    return http.get<{ status: string; entitled: boolean; in_trial: boolean; price_usd: number }>(
-      ROUTES.billingStatus,
-    );
-  },
-  checkout() {
-    return http.post<{ checkout_url: string }>(ROUTES.checkout);
-  },
+  status: () => http.get<BillingStatus>(ROUTES.billingStatus),
 };
 
-export const api = { auth, dailyLook, closet, body, identity, coach, billing };
+export const api = { auth, account, dailyLook, closet, body, identity, coach, discover, calendar, billing };

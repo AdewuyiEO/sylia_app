@@ -1,43 +1,27 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet } from 'react-native';
+import { Pressable } from 'react-native';
 import { useTheme } from '../theme';
+import { Text } from './Text';
 
-type Variant = 'filter' | 'plain';
-
-export function Chip({
-  label,
-  selected,
-  onPress,
-  variant = 'filter',
-}: {
-  label: string;
-  selected?: boolean;
-  onPress?: () => void;
-  variant?: Variant;
+/** Selected filters go olive; anything AI-generated or needing attention goes
+ * ember tint. Never both on one chip. */
+export function Chip({ label, selected, attention, onPress }: {
+  label: string; selected?: boolean; attention?: boolean; onPress?: () => void;
 }) {
-  const { c, radius, type } = useTheme();
-  const bg = selected ? c.signalTint : c.chalk;
-  const fg = selected ? c.signal : c.graphite;
+  const { c, radius, layout } = useTheme();
+  const bg = selected ? c.brand : attention ? c.actionTint : c.inset;
+  const fg = selected ? c.surface : attention ? c.action : c.ink;
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : 'text'}
       accessibilityState={{ selected: !!selected }}
-      style={[
-        styles.chip,
-        {
-          backgroundColor: bg,
-          borderRadius: radius.chip,
-          borderWidth: selected ? 1 : 0,
-          borderColor: selected ? c.signal : 'transparent',
-        },
-      ]}
+      hitSlop={7}
+      style={{ height: layout.chipHeight, paddingHorizontal: 12, borderRadius: radius.chip, backgroundColor: bg,
+               alignItems: 'center', justifyContent: 'center' }}
     >
-      <Text style={{ ...type.caption, color: fg, fontWeight: '500' }}>{label}</Text>
+      <Text variant="small" style={{ color: fg, fontFamily: 'Inter_500Medium' }}>{label}</Text>
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  chip: { height: 32, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
-});

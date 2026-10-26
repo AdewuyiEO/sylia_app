@@ -1,95 +1,72 @@
-import React from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useState } from 'react';
+import { View, Pressable, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/design/theme';
-import { EmptyState } from '../../src/design/components/EmptyState';
-import { useCloset } from '../../src/state/hooks';
-import type { ApiItem } from '../../src/data/api/endpoints';
+import { Text } from '../../src/design/components/Text';
+import { Button } from '../../src/design/components/Button';
+import { Chip } from '../../src/design/components/Chip';
+import { Header, Body, Loading, EmptyState } from '../../src/design/components/Screen';
+import { ItemImage } from '../../src/design/components/ItemImage';
+import { useCloset, useOnFocus } from '../../src/state/hooks';
+import type { ApiItem, Category } from '../../src/data/api/endpoints';
+import { t, type StringKey } from '../../src/i18n';
 
-/**
- * Closet — the wardrobe grid, from the backend.
- * Pure renderer over useCloset() (loading / error / empty / data). No fetch here.
- * Redesign = re-style these states; the data hook stays untouched.
- */
+const FILTERS: (Category | undefined)[] = [undefined, 'top', 'bottom', 'dress', 'outerwear', 'shoes', 'accessory'];
+
+/** Closet grid with category filters. Tap a piece to check or fix its tags. */
 export default function ClosetScreen() {
-  const { c, type, layout, radius } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { items, loading, error, load } = useCloset();
+  const router = useRouter();
+  const { layout } = useTheme();
+  const [category, setCategory] = useState<Category | undefined>();
+  const { data, loading, error, refetch } = useCloset(category);
+  useOnFocus(refetch);
 
-  React.useEffect(() => { load(); }, [load]);
-
-  const Header = (
-    <View style={[styles.hdr, { paddingHorizontal: layout.gutter, paddingTop: insets.top + 8 }]}>
-      <Text style={{ ...type.displayL, color: c.ink }}>Closet</Text>
-      {!loading && !error ? (
-        <Text style={{ ...type.caption, color: c.slate }}>{items.length} items</Text>
-      ) : null}
-    </View>
-  );
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: c.paper }}>
-        {Header}
-        <View style={styles.center}><ActivityIndicator color={c.ink} /></View>
-      </View>
-    );
-  }
-  if (error) {
-    return (
-      <View style={{ flex: 1, backgroundColor: c.paper }}>
-        {Header}
-        <EmptyState title="Couldn't load your closet." body={error}
-          primary={{ label: 'Try again', onPress: load }} />
-      </View>
-    );
-  }
-  if (items.length === 0) {
-    return (
-      <View style={{ flex: 1, backgroundColor: c.paper }}>
-        {Header}
-        <EmptyState title="Your closet is empty."
-          body="Add a few pieces and Sylia will start styling you." />
-      </View>
-    );
-  }
+  const items = data?.items ?? [];
+  const add = <Button label="+" variant="tertiary" onPress={() => router.push('/capture')}
+                      accessibilityHint={t('closet.add')} style={{ width: 44, paddingHorizontal: 0, alignSelf: 'auto' }} />;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: c.paper }}
-      contentContainerStyle={{ paddingBottom: 120 }}>
-      {Header}
-      <View style={[styles.grid, { paddingHorizontal: layout.gutter }]}>
-        {items.map((it: ApiItem) => (
-          <View key={it.id} style={[styles.tile, { backgroundColor: c.chalk, borderRadius: radius.control }]}>
-            <View style={[styles.swatch, { backgroundColor: swatch(it.primary_color) }]} />
-            <Text style={{ ...type.micro, color: c.ink }} numberOfLines={1}>
-              {it.subcategory ?? it.category}
-            </Text>
-            <Text style={{ ...type.micro, color: c.slate }} numberOfLines={1}>
-              {it.primary_color ?? '—'}
-              {it.classification_confidence != null && it.classification_confidence < 0.5 ? ' · review' : ''}
-            </Text>
-          </View>
+    <View style={{ flex: 1 }}>
+      <Header title={t('closet.title')} subtitle={data ? t('closet.count', { count: data.count }) : undefined} right={add} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}
+                  contentContainerStyle={{ paddingHorizontal: layout.gutter, gap: 8, paddingBottom: 12 }}>
+        {FILTERS.map((f) => (
+          <Chip key={f ?? 'all'} label={f ? t(`cat.${f}` as StringKey) : t('closet.all')}
+                selected={category === f} onPress={() => setCategory(f)} />
         ))}
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      {loading && !data ? <Loading /> : error && !data ? (
+        <Body><EmptyState title={error} primary={{ label: t('common.tryAgain'), onPress: refetch }} /></Body>
+      ) : items.length === 0 ? (
+        <Body>
+          <EmptyState title={t('closet.emptyTitle')} body={t('closet.emptyBody')}
+                      primary={{ label: t('closet.add'), onPress: () => router.push('/capture') }} />
+        </Body>
+      ) : (
+        <Body onRefresh={refetch} refreshing={loading}
+              contentStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {items.map((it) => <Tile key={it.id} item={it} onPress={() => router.push(`/item/${it.id}`)} />)}
+        </Body>
+      )}
+    </View>
   );
 }
 
-// crude name→swatch so the grid reads before real cut-out images are shown
-function swatch(name: string | null): string {
-  const map: Record<string, string> = {
-    navy: '#2C3648', cream: '#E7DFCE', black: '#1A1A1E', white: '#F4F4F7',
-    grey: '#96969E', olive: '#6B6B4E', rust: '#B4603C', brown: '#6E4C34',
-    sage: '#8A9A82', charcoal: '#3A3A44', beige: '#D6C7AA',
-  };
-  return (name && map[name]) || '#C9C9D0';
+function Tile({ item, onPress }: { item: ApiItem; onPress: () => void }) {
+  const processing = item.classification_confidence == null;
+  const review = !processing && (item.classification_confidence ?? 1) < 0.5;
+  const name = [item.primary_color, item.subcategory ?? t(`cat.${item.category}` as StringKey)].filter(Boolean).join(' ');
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={name}
+               style={{ width: '31.5%', gap: 4 }}>
+      <ItemImage uri={item.image_url} color={item.primary_color} style={{ aspectRatio: 0.8 }} />
+      <Text variant="small" numberOfLines={1}>{name}</Text>
+      {processing ? <Chip label={t('closet.processing')} /> : review ? <Chip label={t('closet.review')} attention /> : (
+        <Text variant="small" tone="ink60">
+          {item.wear_count ? t('closet.wornTimes', { count: item.wear_count }) : t('closet.neverWorn')}
+        </Text>
+      )}
+    </Pressable>
+  );
 }
-
-const styles = StyleSheet.create({
-  hdr: { paddingBottom: 12 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile: { width: '30%', aspectRatio: 0.8, padding: 8, gap: 4 },
-  swatch: { flex: 1, borderRadius: 6, marginBottom: 4 },
-});

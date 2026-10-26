@@ -1,10 +1,11 @@
 import React from 'react';
-import { Pressable, Text, ActivityIndicator, StyleSheet, ViewStyle } from 'react-native';
+import { Pressable, ActivityIndicator, StyleSheet, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useTheme } from '../theme';
+import { Text } from './Text';
 
-type Variant = 'primary' | 'signal' | 'secondary' | 'ghost';
+/** primary = ember (one per screen) · secondary = outline · tertiary = olive tint · ghost = text */
+type Variant = 'primary' | 'secondary' | 'tertiary' | 'ghost' | 'danger';
 
 interface Props {
   label: string;
@@ -13,52 +14,55 @@ interface Props {
   disabled?: boolean;
   loading?: boolean;
   style?: ViewStyle;
-  fill?: boolean; // stretch to container width
+  icon?: React.ReactNode;
+  accessibilityHint?: string;
 }
 
-export function Button({ label, onPress, variant = 'primary', disabled, loading, style, fill }: Props) {
-  const { c, radius } = useTheme();
-  const scale = useSharedValue(1);
-  const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-
-  const palette: Record<Variant, { bg: string; fg: string; border?: string }> = {
-    primary: { bg: c.ink, fg: c.paper },
-    signal: { bg: c.signal, fg: '#FFFFFF' },
-    secondary: { bg: 'transparent', fg: c.ink, border: c.mist },
-    ghost: { bg: 'transparent', fg: c.slate },
-  };
-  const p = palette[variant];
+export function Button({ label, onPress, variant = 'primary', disabled, loading, style, icon, accessibilityHint }: Props) {
+  const { c, radius, layout } = useTheme();
+  const look = {
+    primary: { bg: c.action, fg: c.onAction, border: undefined },
+    secondary: { bg: 'transparent', fg: c.ink, border: c.hair },
+    tertiary: { bg: c.brandTint, fg: c.brand, border: undefined },
+    ghost: { bg: 'transparent', fg: c.ink60, border: undefined },
+    danger: { bg: 'transparent', fg: c.critical, border: c.hair },
+  }[variant];
 
   return (
-    <Animated.View style={[fill && { flex: 1 }, aStyle]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !!disabled }}
-        disabled={disabled || loading}
-        onPressIn={() => {
-          scale.value = withTiming(0.97, { duration: 120 });
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }}
-        onPressOut={() => (scale.value = withTiming(1, { duration: 120 }))}
-        onPress={onPress}
-        style={[
-          styles.base,
-          { backgroundColor: p.bg, borderRadius: radius.control, opacity: disabled ? 0.38 : 1 },
-          p.border ? { borderWidth: 1, borderColor: p.border } : null,
-          style,
-        ]}
-      >
-        {loading ? (
-          <ActivityIndicator color={p.fg} />
-        ) : (
-          <Text style={[styles.label, { color: p.fg }]}>{label}</Text>
-        )}
-      </Pressable>
-    </Animated.View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
+      disabled={disabled || loading}
+      onPress={() => {
+        Haptics.selectionAsync().catch(() => {});
+        onPress?.();
+      }}
+      style={({ pressed }) => [
+        styles.base,
+        {
+          height: variant === 'ghost' ? layout.minTap : layout.buttonHeight,
+          backgroundColor: look.bg,
+          borderRadius: radius.btn,
+          opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
+        },
+        look.border ? { borderWidth: 1, borderColor: look.border } : null,
+        style,
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator color={look.fg} />
+      ) : (
+        <>
+          {icon}
+          <Text variant="h3" style={{ color: look.fg, fontSize: 16 }}>{label}</Text>
+        </>
+      )}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: { height: 52, minWidth: 88, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center' },
-  label: { fontFamily: 'Switzer-Variable', fontSize: 17, fontWeight: '600' },
+  base: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
 });

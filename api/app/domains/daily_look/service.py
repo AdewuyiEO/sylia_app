@@ -141,7 +141,8 @@ def wear_stats(db, user, today: date) -> dict:
     }
 
 
-def explain(breakdown: dict, *, context: dict | None = None, pieces: list | None = None) -> str:
+def explain(breakdown: dict, *, context: dict | None = None, pieces: list | None = None,
+            locale: str | None = None) -> str:
     """Turn the winning score_breakdown into a 1–2 sentence rationale.
 
     Prod: a single cached Claude call (spec §4.4) — the static styling-voice
@@ -149,7 +150,7 @@ def explain(breakdown: dict, *, context: dict | None = None, pieces: list | None
     key): a deterministic template. Both describe the SAME real subscores, so the
     'Claude explains, never chooses' invariant holds either way.
     """
-    template = _template_explain(breakdown)
+    template = _template_explain(breakdown, locale)
 
     from ...core import llm
     if not llm.available():
@@ -160,29 +161,48 @@ def explain(breakdown: dict, *, context: dict | None = None, pieces: list | None
         "someone, for a personal styling app. You are given the outfit's score "
         "breakdown (context/color/body/identity, 0-100) and the day's context. "
         "Explain the pick in plain language grounded in those numbers. Never "
-        "invent facts not implied by the scores. No more than 25 words. No emoji."
+        "invent facts not implied by the scores. No more than 25 words. No emoji. "
+        "Write in the language of the given locale."
     )
     facts = {"breakdown": breakdown, "context": _explain_context(context),
-             "pieces": [getattr(p, "subcategory", str(p)) for p in (pieces or [])]}
+             "pieces": [getattr(p, "subcategory", str(p)) for p in (pieces or [])],
+             "locale": locale or "en"}
     import json
-    user = ("Write the explanation for this look.\n" + json.dumps(facts))
+    user = "Write the explanation for this look.\n" + json.dumps(facts)
     return llm.complete(
         system, [{"role": "user", "content": user}],
         model=llm.model_for('explanation'), max_tokens=80, fallback=template,
     )
 
 
-def _template_explain(breakdown: dict) -> str:
-    parts = []
-    if breakdown.get("context", 0) >= 70:
-        parts.append("matches today's weather and your schedule")
-    if breakdown.get("identity", 0) >= 70:
-        parts.append("leans into how you want to show up")
-    if breakdown.get("color", 0) >= 70:
-        parts.append("sits in your palette")
-    body_part = "and works with your fit rules" if breakdown.get("body", 0) >= 70 else ""
-    lead = ", ".join(parts) if parts else "a balanced pick from your closet"
-    return f"This look {lead} {body_part}".strip().rstrip(",") + "."
+# phrasebook for the no-LLM template, per language (falls back to English)
+_PHRASES = {
+    "en": {"context": "suits today's weather and plans", "identity": "leans into how you want to come across",
+           "color": "sits in your palette", "body": "works with your fit rules",
+           "lead": "This look {parts}.", "and": "and", "default": "A balanced pick from your closet for today."},
+    "fr": {"context": "convient à la météo et au programme du jour", "identity": "reflète l'image que vous voulez donner",
+           "color": "reste dans votre palette", "body": "respecte vos règles de coupe",
+           "lead": "Cette tenue {parts}.", "and": "et", "default": "Un choix équilibré dans votre dressing pour aujourd'hui."},
+    "es": {"context": "encaja con el tiempo y los planes de hoy", "identity": "refleja cómo quieres que te vean",
+           "color": "está dentro de tu paleta", "body": "respeta tus reglas de corte",
+           "lead": "Este look {parts}.", "and": "y", "default": "Una elección equilibrada de tu armario para hoy."},
+}
+
+
+def phrases(locale: str | None) -> dict:
+    return _PHRASES.get((locale or "en").split("-")[0].lower(), _PHRASES["en"])
+
+
+def join_list(items: list[str], conj: str) -> str:
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} {conj} {items[-1]}"
+
+
+def _template_explain(breakdown: dict, locale: str | None = None) -> str:
+    ph = phrases(locale)
+    parts = [ph[k] for k in ("context", "identity", "color", "body") if breakdown.get(k, 0) >= 70]
+    if not parts:
+        return ph["default"]
+    return ph["lead"].format(parts=join_list(parts, ph["and"]))
 
 
 def _explain_context(context: dict | None) -> dict:

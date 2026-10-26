@@ -1,27 +1,23 @@
 # Sylia
 
-An AI stylist that recommends outfits from the clothes you already own — grounded
-in your identity, body, wardrobe, weather, and calendar.
+An AI stylist that picks one outfit a day from the clothes you already own —
+grounded in how you want to come across, your shape and colouring, the weather,
+and your calendar — and only ever suggests buying something when it genuinely
+completes your closet.
 
-**One repo, two halves:**
+- **`api/`** — FastAPI backend: the deterministic outfit scorer, CV pipeline,
+  body/undertone analysis, identity onboarding, style coach, wear tracking,
+  in-app billing, and the brand platform (catalog, closet-gap Discover,
+  partner API, k-anonymous insights). 102 tests.
+- **`mobile/`** — Expo app (iOS-first), on the Olive Grove / Earth Riches design
+  system, in English, French and Spanish.
 
-- **`api/`** — the backend (FastAPI). All the logic: the outfit scorer, CV
-  pipeline, body/undertone analysis, identity extraction, style coach, billing.
-  Runs on a server. 68 tests. The recommendation is deterministic; the LLM only
-  *explains* a decision the scorer already made (and the LLM is swappable —
-  Anthropic/OpenAI via one env var).
-
-- **`mobile/`** — the app (Expo / React Native). The screens users tap, wired to
-  the backend through a clean hook layer. Runs on iPhone/Android (Expo Go now,
-  TestFlight later).
-
-The two connect through one setting: `EXPO_PUBLIC_API_URL` in `mobile/`.
-
-## Run both together
-See **`SETUP_AND_DEPLOY.md`** → "Quickstart — run BOTH together". In short:
-backend with `uvicorn app.main:app --host 0.0.0.0 --port 8000`, app with
-`npx expo start` after pointing `EXPO_PUBLIC_API_URL` at your computer's IP.
+The recommendation is deterministic; the LLM only *explains* a decision the
+scorer already made ("Claude explains, never chooses").
 
 ## Docs
-- `SETUP_AND_DEPLOY.md` — local run, keys, Docker, deploy, TestFlight, testing
-- `REPO_STRUCTURE.md` — full map + build history
+
+- `SETUP_AND_DEPLOY.md` — run locally, keys, deploy (Render + R2), TestFlight,
+  subscriptions, brand onboarding
+- `REPO_STRUCTURE.md` — code map and what is real / stubbed / unverified
+- `mobile/README.md` — app structure and conventions

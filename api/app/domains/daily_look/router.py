@@ -84,7 +84,7 @@ def _persist(db: Session, user: User, day: date_cls, ctx: dict, cand, rank: int)
     outfit = Outfit(
         user_id=user.id, outfit_date=day, rank=rank, context=ctx,
         score_total=bd.total, score_breakdown=breakdown,
-        explanation=service.explain(breakdown, context=ctx, pieces=cand.pieces),
+        explanation=service.explain(breakdown, context=ctx, pieces=cand.pieces, locale=user.locale),
     )
     db.add(outfit)
     db.flush()

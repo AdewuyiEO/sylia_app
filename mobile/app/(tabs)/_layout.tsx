@@ -1,90 +1,51 @@
 import React from 'react';
-import { Pressable } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { useTheme } from '../../src/design/theme';
-import { AuraOrb } from '../../src/design/components/AuraOrb';
-import { useToast } from '../../src/ui/toast';
+import { t } from '../../src/i18n';
 
-function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const { c } = useTheme();
-  const stroke = focused ? c.ink : c.slate;
-  const common = { fill: 'none', stroke, strokeWidth: 1.5 } as const;
-  switch (name) {
-    case 'today':
-      return (
-        <Svg width={24} height={24} viewBox="0 0 24 24">
-          <Rect x={3} y={4} width={18} height={17} rx={2} {...common} />
-          <Path d="M3 9h18M8 2v4M16 2v4" {...common} />
-          <Circle cx={12} cy={15} r={1.6} fill={stroke} />
-        </Svg>
-      );
-    case 'closet':
-      return (
-        <Svg width={24} height={24} viewBox="0 0 24 24">
-          <Path d="M12 3l7 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V8l7-5z" {...common} />
-          <Path d="M12 3v6M8 19v-6h8v6" {...common} />
-        </Svg>
-      );
-    case 'discover':
-      return (
-        <Svg width={24} height={24} viewBox="0 0 24 24">
-          <Circle cx={12} cy={12} r={9} {...common} />
-          <Path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" {...common} />
-        </Svg>
-      );
-    default:
-      return (
-        <Svg width={24} height={24} viewBox="0 0 24 24">
-          <Circle cx={12} cy={8} r={4} {...common} />
-          <Path d="M5 21v-1a7 7 0 0114 0v1" {...common} />
-        </Svg>
-      );
-  }
+/** Line icons from the design's 14-symbol set, 1.5px stroke. */
+function TabIcon({ name, color }: { name: string; color: string }) {
+  const p = { fill: 'none', stroke: color, strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24">
+      {name === 'today' && (<><Rect x={3} y={4.5} width={18} height={16} rx={2.5} {...p} /><Path d="M3 9.5h18M8 2.5v4M16 2.5v4" {...p} /><Circle cx={12} cy={15} r={1.6} fill={color} /></>)}
+      {name === 'closet' && (<><Path d="M12 6.5a2 2 0 1 0-2-2" {...p} /><Path d="M12 6.5v1.2L3.6 13.4a1.4 1.4 0 0 0 .8 2.6h15.2a1.4 1.4 0 0 0 .8-2.6L12 7.7" {...p} /></>)}
+      {name === 'coach' && (<><Path d="M4 5.5h16v10H9l-5 4v-14z" {...p} /><Path d="M8 10.5h8" {...p} /></>)}
+      {name === 'discover' && (<><Circle cx={12} cy={12} r={9} {...p} /><Path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" {...p} /></>)}
+      {name === 'you' && (<><Circle cx={12} cy={8} r={4} {...p} /><Path d="M4.5 21v-.5a7.5 7.5 0 0 1 15 0v.5" {...p} /></>)}
+    </Svg>
+  );
 }
 
 export default function TabsLayout() {
-  const { c } = useTheme();
+  const { c, layout, type } = useTheme();
   const insets = useSafeAreaInsets();
-  const raise = useToast();
+  const icon = (name: string) => ({ color }: { color: unknown }) => <TabIcon name={name} color={String(color)} />;
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        sceneStyle: { backgroundColor: c.bg },
         tabBarStyle: {
-          height: 64 + insets.bottom,
+          height: layout.tabBarHeight + insets.bottom,
           paddingBottom: insets.bottom,
-          backgroundColor: c.paper,
-          borderTopColor: c.mist,
+          paddingTop: 6,
+          backgroundColor: c.bg,
+          borderTopColor: c.hair,
         },
-        tabBarActiveTintColor: c.ink,
-        tabBarInactiveTintColor: c.slate,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
+        tabBarActiveTintColor: c.action,
+        tabBarInactiveTintColor: c.inactive,
+        tabBarLabelStyle: type.tab,
       }}
     >
-      <Tabs.Screen name="today" options={{ title: 'Today', tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="today" focused={focused} /> }} />
-      <Tabs.Screen name="closet" options={{ title: 'Closet', tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="closet" focused={focused} /> }} />
-      {/* the docked orb — a real centre slot; its button opens the generator
-          instead of navigating, so it always sits at the thumb-arc centre. */}
-      <Tabs.Screen
-        name="aura"
-        options={{
-          title: '',
-          tabBarIcon: () => <AuraOrb size={44} />,
-          tabBarButton: (props: any) => (
-            <Pressable
-              style={props.style}
-              onPress={() => raise({ message: 'Aura sheet — the generator opens here (next build).' })}
-            >
-              {props.children}
-            </Pressable>
-          ),
-        }}
-      />
-      <Tabs.Screen name="discover" options={{ title: 'Discover', tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="discover" focused={focused} /> }} />
-      <Tabs.Screen name="you" options={{ title: 'You', tabBarIcon: ({ focused }: { focused: boolean }) => <TabIcon name="you" focused={focused} /> }} />
+      <Tabs.Screen name="today" options={{ title: t('tab.today'), tabBarIcon: icon('today') }} />
+      <Tabs.Screen name="closet" options={{ title: t('tab.closet'), tabBarIcon: icon('closet') }} />
+      <Tabs.Screen name="coach" options={{ title: t('tab.coach'), tabBarIcon: icon('coach') }} />
+      <Tabs.Screen name="discover" options={{ title: t('tab.discover'), tabBarIcon: icon('discover') }} />
+      <Tabs.Screen name="you" options={{ title: t('tab.you'), tabBarIcon: icon('you') }} />
     </Tabs>
   );
 }

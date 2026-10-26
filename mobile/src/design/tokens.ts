@@ -1,188 +1,108 @@
 /**
- * Aura — AI Stylist
- * Design tokens. Single source of truth for React Native.
+ * Sylia design tokens — Design System v2 (Olive Grove / Earth Riches / Desert Sunset).
  *
  * Rules encoded here:
- *  - UI is cool greyscale; garments supply all color.
- *  - Content radius is 4 (photographic), chrome radius is 28 (soft). No in-betweens.
- *  - `signal` is for human intent only. `aura` gradient is for AI presence only.
+ *  - Bone is the base, linen for anything raised, olive for structure.
+ *  - Ember is for actions only: one ember element per screen.
+ *  - Dark mode (Earth Riches) is not an inversion: browns stay brown.
+ *  - Components read semantic names, never hex values.
  */
 
 export const color = {
   light: {
-    paper: '#FFFFFF',
-    chalk: '#F4F4F7',
-    mist: '#E7E7EC',
-    ash: '#B9B9C4',
-    slate: '#74747F',
-    graphite: '#3A3A44',
-    ink: '#14141A',
-
-    signal: '#E4005B',
-    signalPress: '#C10049',
-    signalTint: '#FDE7EF',
-
-    positive: '#0E7C66',
-    caution: '#B5730B',
-    critical: '#B3261E',
-
-    scrim: 'rgba(20,20,26,0.32)',
-    glass: 'rgba(20,20,26,0.44)',
-    glassBorder: 'rgba(255,255,255,0.14)',
+    bg: '#FBF9F5',        // bone — app background, sheets
+    surface: '#FFFFFF',   // paper — cards, fields
+    inset: '#EFE7DA',     // linen 50 — chips, skeletons, inset rows
+    mat: '#D9C7B0',       // linen — photo mats, empty tiles
+    ink: '#241F1B',       // body copy, headings
+    ink60: '#6B6259',     // secondary copy
+    ink40: '#9A9089',     // tertiary, placeholders
+    hair: '#E4DED3',      // borders, dividers
+    brand: '#556B2F',     // olive — structure, selected state, progress
+    brandTint: '#E9EDE0',
+    action: '#BC4F26',    // ember — primary button, active tab, links
+    actionTint: '#FBEADF',
+    onAction: '#FFFFFF',
+    inactive: '#8A7B6A',  // taupe — inactive tab icons, disabled (never copy)
+    critical: '#A33A2A',
+    // quartered score ring, clockwise from top
+    fit: '#556B2F',
+    palette: '#BC4F26',
+    occasion: '#C4A882',
+    weather: '#8A9A5B',
+    scrim: 'rgba(36,31,27,0.4)',
   },
   dark: {
-    paper: '#0B0B0F',       // screen bg (void)
-    chalk: '#16161C',       // card / tile bg (carbon)
-    mist: '#22222A',        // hairline (basalt)
-    ash: '#3C3C47',         // disabled (steel)
-    slate: '#8E8E9A',       // secondary text (fog)
-    graphite: '#D7D7DE',    // body text (frost)
-    ink: '#F7F7FA',         // primary text / inverted fill (snow)
-
-    signal: '#FF3D80',
-    signalPress: '#E4005B',
-    signalTint: '#2A0E1B',
-
-    positive: '#3BC7A8',
-    caution: '#E5A93D',
-    critical: '#FF6B5E',
-
-    scrim: 'rgba(0,0,0,0.48)',
-    glass: 'rgba(0,0,0,0.52)',
-    glassBorder: 'rgba(255,255,255,0.10)',
+    bg: '#241C14',        // espresso
+    surface: '#3A2D22',   // walnut — cards, offline banner
+    inset: '#4A3A2C',
+    mat: '#5C3D2E',
+    ink: '#F2EAE0',
+    ink60: '#B8A794',     // cocoa taupe
+    ink40: '#8A7B6A',
+    hair: '#4A3A2C',
+    brand: '#8A9A5B',     // sage stands in for olive on dark
+    brandTint: '#33402180',
+    action: '#E2703F',    // ember light
+    actionTint: '#5A2E1B',
+    onAction: '#241C14',
+    inactive: '#8A7B6A',
+    critical: '#F08A70',
+    fit: '#8A9A5B',
+    palette: '#E2703F',
+    occasion: '#C4A882',
+    weather: '#D9C7B0',
+    scrim: 'rgba(0,0,0,0.5)',
   },
-} as const;
-
-/** The Aura material. Permitted on: the orb, AI loaders, the Pro badge. Nowhere else. */
-export const auraMaterial = {
-  stops: ['#BFC9FF', '#E4D3FF', '#FFD6E7', '#C9F3EA', '#DCE3FF'],
-  locations: [0, 0.28, 0.52, 0.76, 1],
-  rotationMs: 8000,
-  glossMs: 3200,
-  glossOpacity: 0.22,
-  glossWidth: 0.18,
-  blur: 8,
 } as const;
 
 export const font = {
-  display: 'InstrumentSerif-Regular',
-  displayItalic: 'InstrumentSerif-Italic',
-  ui: 'Switzer-Variable',
-  mono: 'GeistMono-Regular',
+  display: 'Fraunces_600SemiBold',
+  ui: 'Inter_400Regular',
+  uiMedium: 'Inter_500Medium',
+  uiSemi: 'Inter_600SemiBold',
 } as const;
 
 type TypeStyle = {
   fontFamily: string;
   fontSize: number;
   lineHeight: number;
-  letterSpacing: number;
-  fontWeight: '400' | '500' | '600' | '700';
+  letterSpacing?: number;
   textTransform?: 'uppercase';
+  fontVariant?: ('tabular-nums')[];
 };
 
-export const type: Record<string, TypeStyle> = {
-  displayXL:  { fontFamily: font.display, fontSize: 40, lineHeight: 40, letterSpacing: -0.8, fontWeight: '400' },
-  displayL:   { fontFamily: font.display, fontSize: 32, lineHeight: 34, letterSpacing: -0.64, fontWeight: '400' },
-  title:      { fontFamily: font.ui, fontSize: 24, lineHeight: 28, letterSpacing: -0.24, fontWeight: '600' },
-  heading:    { fontFamily: font.ui, fontSize: 20, lineHeight: 26, letterSpacing: -0.2, fontWeight: '600' },
-  bodyL:      { fontFamily: font.ui, fontSize: 17, lineHeight: 24, letterSpacing: 0, fontWeight: '400' },
-  body:       { fontFamily: font.ui, fontSize: 15, lineHeight: 22, letterSpacing: 0, fontWeight: '400' },
-  bodyStrong: { fontFamily: font.ui, fontSize: 15, lineHeight: 22, letterSpacing: 0, fontWeight: '600' },
-  caption:    { fontFamily: font.ui, fontSize: 13, lineHeight: 18, letterSpacing: 0, fontWeight: '400' },
-  label:      { fontFamily: font.mono, fontSize: 13, lineHeight: 18, letterSpacing: 0.26, fontWeight: '500' },
-  micro:      { fontFamily: font.mono, fontSize: 11, lineHeight: 12, letterSpacing: 0.66, fontWeight: '500', textTransform: 'uppercase' },
-};
+/** Fraunces never goes below 20px; small caps and labels are always Inter. */
+export const type = {
+  display: { fontFamily: font.display, fontSize: 34, lineHeight: 38 },
+  h1: { fontFamily: font.display, fontSize: 28, lineHeight: 32 },
+  h2: { fontFamily: font.display, fontSize: 22, lineHeight: 27 },
+  h3: { fontFamily: font.uiSemi, fontSize: 17, lineHeight: 22 },
+  body: { fontFamily: font.ui, fontSize: 15, lineHeight: 22 },
+  bodyStrong: { fontFamily: font.uiSemi, fontSize: 15, lineHeight: 22 },
+  small: { fontFamily: font.ui, fontSize: 13, lineHeight: 18 },
+  label: { fontFamily: font.uiSemi, fontSize: 11, lineHeight: 14, letterSpacing: 1.4, textTransform: 'uppercase' },
+  tab: { fontFamily: font.uiMedium, fontSize: 10, lineHeight: 12 },
+  number: { fontFamily: font.uiSemi, fontSize: 15, lineHeight: 20, fontVariant: ['tabular-nums'] },
+} satisfies Record<string, TypeStyle>;
 
-/** Base unit 4. Use tokens, never raw numbers. */
-export const space = {
-  s1: 4, s2: 8, s3: 12, s4: 16, s5: 20, s6: 24,
-  s7: 32, s8: 40, s9: 48, s10: 56, s11: 72, s12: 96,
-} as const;
+/** 8pt grid, 20px screen gutters. */
+export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 32, xxxl: 48 } as const;
 
 export const layout = {
   gutter: 20,
-  cardPadding: 16,
-  sectionGap: 32,
-  headerHeight: 52,
-  tabBarHeight: 49,
-  minTapTarget: 44,
-  maxBodyChars: 68,
-  /** Anchor primary CTAs here, measured up from the bottom safe area. */
-  thumbAnchor: 148,
+  minTap: 44,
+  buttonHeight: 48,
+  fieldHeight: 50,
+  chipHeight: 30,
+  tabBarHeight: 56,
 } as const;
 
-export const radius = {
-  sharp: 0,
-  content: 4,   // ALL garment / outfit / product imagery
-  control: 8,   // buttons, inputs, segmented
-  chip: 16,
-  sheet: 28,    // top corners only
-  round: 999,
-} as const;
-
-/** Only two shadows exist. Everything else separates with a 1px hairline. */
-export const elevation = {
-  sheet: {
-    shadowColor: '#14141A', shadowOpacity: 0.12,
-    shadowRadius: 32, shadowOffset: { width: 0, height: -8 }, elevation: 16,
-  },
-  orb: {
-    shadowColor: '#14141A', shadowOpacity: 0.16,
-    shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 8,
-  },
-} as const;
+export const radius = { chip: 15, btn: 10, card: 14, sheet: 28, round: 999 } as const;
 
 export const motion = {
-  tap: { duration: 120, easing: [0.2, 0, 0, 1] },
-  micro: { duration: 180, easing: [0.2, 0, 0, 1] },
-  screen: { duration: 320, easing: [0.2, 0, 0, 1] },
-  reveal: { duration: 420, stagger: 60, easing: [0.16, 1, 0.3, 1] },
-  sheetSpring: { damping: 30, stiffness: 300, mass: 1 },
-  pressScale: 0.97,
-} as const;
-
-export const component = {
-  button: {
-    primary:   { height: 52, radius: radius.control, fill: 'ink', label: 'paper' },
-    signal:    { height: 52, radius: radius.control, fill: 'signal', label: 'paper' },
-    secondary: { height: 52, radius: radius.control, fill: 'transparent', border: 'mist', label: 'ink' },
-    ghost:     { height: 44, radius: radius.control, fill: 'transparent', label: 'slate' },
-    icon:      { size: 44, glyph: 24, radius: radius.round },
-    small:     { height: 36, radius: radius.control },
-    minWidth: 88,
-    paddingH: space.s5,
-    disabledOpacity: 0.38,
-  },
-  chip: { height: 32, radius: radius.chip, paddingH: 12 },
-  sheet: { radius: radius.sheet, grabber: { w: 36, h: 4 }, snapPoints: [0.45, 0.9] },
-  toast: { height: 56, radius: radius.control, autoDismissMs: 4000 },
-  input: { height: 52, radius: radius.control, fill: 'chalk' },
-  orb: { tabSize: 44, heroSize: 88, breatheScale: 0.04, breatheMs: 3000 },
-  grid: {
-    closet3: { tile: 110, gap: 8 },
-    closet2: { tile: 172, gap: 8 },
-    closet4: { tile: 81, gap: 8 },
-    outfit2: { w: 171, h: 228 },
-    outfitRail: { w: 140, h: 187 },
-    hero: { w: 350, h: 466 },
-  },
-} as const;
-
-/** Feedback signal weights. Wear is ground truth; everything else is aspirational. */
-export const signalWeight = {
-  wear: 10,
-  reasonChip: 4,
-  save: 3,
-  rate: 1,
-  dwell: 0.5,
-} as const;
-
-export const limits = {
-  reasonPillChars: 96,
-  chatProseSentences: 2,
-  freeGenerationsPerDay: 3,
-  freeWardrobeItems: 60,
-  freeCollections: 3,
-  generationHardCapMs: 6000,
-  undoWindowMs: 10000,
+  tap: 200,
+  screen: 400,
+  ring: 600,          // the score ring is the only entrance animation in the app
+  toastMs: 3000,
 } as const;

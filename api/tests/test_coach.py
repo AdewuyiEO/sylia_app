@@ -43,6 +43,15 @@ def t_explain_template_fallback():
 test("explanation falls back to a grounded template without a key", t_explain_template_fallback)
 
 
+def t_explain_localised():
+    fr = explain({"context": 90, "color": 80, "body": 50, "identity": 40}, locale="fr-FR")
+    ok(fr.startswith("Cette tenue") and "palette" in fr, f"French template: {fr}")
+    es = explain({"context": 10, "color": 10, "body": 10, "identity": 10}, locale="es")
+    ok(es.startswith("Una elección"), f"Spanish default: {es}")
+    ok(explain({"context": 90}, locale="xx").startswith("This look"), "unknown locale falls back to English")
+test("template explanations follow the user's language", t_explain_localised)
+
+
 def t_context_preamble_assembles():
     H = _auth("coach1@x.com")
     # give this user a couple of items + an identity so the preamble has content

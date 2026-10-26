@@ -1,70 +1,51 @@
 import React, { useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
+import { Pressable, StyleSheet } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
+import { Text } from './Text';
 
 export interface ToastData {
   message: string;
-  undo?: () => void;
+  action?: { label: string; onPress: () => void };
 }
 
-/**
- * Single-slot toast. A new toast replaces, never stacks (spec). Anchored above
- * the tab bar. Auto-dismisses at 4s unless the caller clears it.
- */
+/** One at a time, 12px above the tab bar, 3s auto-dismiss. */
 export function Toast({ data, onClear }: { data: ToastData | null; onClear: () => void }) {
-  const { c, radius, type } = useTheme();
+  const { c, radius, layout, motion } = useTheme();
   const insets = useSafeAreaInsets();
-  const y = useSharedValue(200);
+  const opacity = useSharedValue(0);
 
   useEffect(() => {
-    if (data) {
-      y.value = withSpring(0, { damping: 22, stiffness: 260 });
-      const t = setTimeout(() => {
-        y.value = withTiming(200, { duration: 260 });
-        setTimeout(onClear, 260);
-      }, 4200);
-      return () => clearTimeout(t);
-    } else {
-      y.value = withTiming(200, { duration: 200 });
-    }
+    if (!data) return;
+    opacity.value = withTiming(1, { duration: motion.tap });
+    const id = setTimeout(() => {
+      opacity.value = withTiming(0, { duration: motion.tap });
+      setTimeout(onClear, motion.tap);
+    }, motion.toastMs);
+    return () => clearTimeout(id);
   }, [data]);
 
-  const aStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
+  const aStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
   if (!data) return null;
 
   return (
     <Animated.View
-      pointerEvents="box-none"
-      style={[styles.wrap, { bottom: insets.bottom + 64 + 12 }, aStyle]}
+      accessibilityLiveRegion="polite"
+      accessibilityRole="alert"
+      style={[styles.wrap, { bottom: insets.bottom + layout.tabBarHeight + 12, backgroundColor: c.ink, borderRadius: radius.btn }, aStyle]}
     >
-      <View style={[styles.toast, { backgroundColor: c.ink, borderRadius: radius.control }]}>
-        <Text style={{ ...type.body, color: c.paper, flex: 1 }}>{data.message}</Text>
-        {data.undo && (
-          <Pressable
-            onPress={() => {
-              data.undo!();
-              onClear();
-            }}
-            hitSlop={10}
-          >
-            <Text style={{ ...type.body, color: c.signal, fontWeight: '600' }}>Undo</Text>
-          </Pressable>
-        )}
-      </View>
+      <Text style={{ color: c.bg, flex: 1 }}>{data.message}</Text>
+      {data.action ? (
+        <Pressable onPress={() => { data.action!.onPress(); onClear(); }} hitSlop={10} accessibilityRole="button">
+          <Text variant="bodyStrong" style={{ color: c.bg }}>{data.action.label}</Text>
+        </Pressable>
+      ) : null}
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', left: 16, right: 16 },
-  toast: {
-    minHeight: 56,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
+  wrap: { position: 'absolute', left: 16, right: 16, minHeight: 52, paddingHorizontal: 16, paddingVertical: 12,
+          flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

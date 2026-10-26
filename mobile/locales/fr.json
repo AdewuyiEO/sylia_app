@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Sylia",
+    "NSCameraUsageDescription": "Sylia utilise l’appareil photo pour photographier vos vêtements et, si vous le souhaitez, analyser votre carnation.",
+    "NSPhotoLibraryUsageDescription": "Sylia utilise vos photos pour ajouter des vêtements à votre dressing.",
+    "NSLocationWhenInUseUsageDescription": "Sylia utilise votre position approximative pour la météo du jour."
+  }
+}

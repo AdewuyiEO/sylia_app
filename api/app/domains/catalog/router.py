@@ -65,7 +65,7 @@ def discover(category: str | None = None, limit: int = 12, db: Session = Depends
                 "reason": "Add a few pieces to your closet and we'll find what completes it."}
 
     day = look_service.local_today(user)
-    cache_key = f"discover:{user.id}:{day}:{category}:{_closet_fingerprint(items)}:{user.country}"
+    cache_key = f"discover:{user.id}:{day}:{category}:{_closet_fingerprint(items)}:{user.country}:{user.locale}"
     scored = kv.get(cache_key)
     if scored is None:
         wardrobe = [look_service._garment_from_row(i) for i in items]
@@ -84,7 +84,7 @@ def discover(category: str | None = None, limit: int = 12, db: Session = Depends
             res = gap.analyze(to_garment(product), wardrobe, body, ident)
             scored.append({"product_id": str(product.id), "brand_id": str(brand.id),
                            "fit_score": res.fit_score, "unlocks": res.unlocks,
-                           "pairs_with": res.pairs_with, "rationale": gap.rationale(res)})
+                           "pairs_with": res.pairs_with, "rationale": gap.rationale(res, user.locale)})
         scored = gate_affiliate(scored)
         scored.sort(key=lambda c: (-c["fit_score"], -c["unlocks"], c["product_id"]))
         kv.set(cache_key, scored, ttl=6 * 3600)
