@@ -18,12 +18,12 @@ from ...models import User
 settings = get_settings()
 router = APIRouter(prefix="/v1", tags=["uploads"])
 
-PURPOSES = ("closet", "body")
+PURPOSES = ("closet", "body", "tryon")
 _EXT = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic"}
 
 
 class UploadIn(BaseModel):
-    purpose: str = Field(pattern="^(closet|body)$")
+    purpose: str = Field(pattern="^(closet|body|tryon)$")
     content_type: str = "image/jpeg"
 
 

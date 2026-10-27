@@ -70,7 +70,7 @@ export default function PaywallScreen() {
       <Body>
         <Text variant="h2">{t('paywall.lead')}</Text>
         <Card>
-          {(['paywall.f1', 'paywall.f2', 'paywall.f3'] as const).map((k) => (
+          {(['paywall.f4', 'paywall.f1', 'paywall.f2', 'paywall.f3'] as const).map((k) => (
             <View key={k} style={{ flexDirection: 'row', gap: 10 }}>
               <Text tone="brand">✓</Text>
               <Text style={{ flex: 1 }}>{t(k)}</Text>

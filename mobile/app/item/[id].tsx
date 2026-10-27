@@ -71,6 +71,10 @@ export default function ItemScreen() {
               subtitle={item.wear_count ? `${t('closet.wornTimes', { count: item.wear_count })} · ${shortDate(item.last_worn_at)}` : t('closet.neverWorn')} />
       <Body>
         <ItemImage uri={item.image_url} color={draft.primary_color} style={{ aspectRatio: 1 }} />
+        {['top', 'bottom', 'dress', 'outerwear'].includes(item.category) ? (
+          <Button label={`✦ ${t('tryon.tryOnMe')}`} variant="secondary" accessibilityHint={t('tryon.tryOnMeHint')}
+                  onPress={() => router.push({ pathname: '/tryon', params: { item_id: item.id, title: item.subcategory ?? t(`cat.${item.category}` as StringKey) } })} />
+        ) : null}
         {unsure ? <Card inset><Text variant="small">{t('item.reviewHint')}</Text></Card> : null}
 
         <Text variant="label" tone="ink60">{t('item.category')}</Text>

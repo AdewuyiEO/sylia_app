@@ -45,6 +45,7 @@ export default function YouScreen() {
           <Row label={t('you.journey')} onPress={() => router.push('/journey')} />
           <Row label={t('you.styleProfile')} onPress={() => router.push('/onboarding')} />
           <Row label={t('you.bodyProfile')} onPress={() => router.push('/body')} />
+          <Row label={t('you.fittingRoom')} onPress={() => router.push('/tryon-setup')} />
           <Row label={t('you.settings')} onPress={() => router.push('/settings')} />
           <Row label={t('you.logout')} onPress={logout} />
         </View>

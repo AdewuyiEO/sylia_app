@@ -32,5 +32,9 @@ class ClothingItem(Base):
     brand_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("brands.id"), nullable=True, index=True)
     product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id"), nullable=True)
     external_image_url: Mapped[str | None] = mapped_column(String, nullable=True)  # catalog image when added from a product
+    # try-on: the size on the label, and optional flat measurements in cm
+    # {bust, waist, hips, length}; without them the fit engine estimates from the body
+    size_label: Mapped[str | None] = mapped_column(String, nullable=True)
+    garment_measurements: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)                # soft delete
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

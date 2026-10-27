@@ -55,6 +55,13 @@ export const ROUTES = {
   quizFallback: '/v1/body-profile/quiz-fallback',
   bodyProfile: '/v1/body-profile',
 
+  tryonProfile: '/v1/tryon/profile',
+  tryonFit: '/v1/tryon/fit',
+  tryonRenders: '/v1/tryon/renders',
+  tryonRender: (id: string) => `/v1/tryon/renders/${id}`,
+  tryonJob: (jobId: string) => `/v1/tryon/renders/jobs/${jobId}`,
+  tryonItemSize: (id: string) => `/v1/tryon/items/${id}/size`,
+
   onboardingStart: '/v1/onboarding/sessions',
   onboardingTurn: (sid: string) => `/v1/onboarding/sessions/${sid}/messages`,
   identityProfile: '/v1/identity-profile',

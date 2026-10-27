@@ -175,5 +175,26 @@ def analyze_body(job_id: str, user_id: str, s3_keys: list[str]):
                 pass
 
 
+def render_tryon(job_id: str, user_id: str, item_id: str | None, product_id: str | None, size: str):
+    """Draw the garment on the user's fitting-room photo at the chosen size."""
+    from ..db import SessionLocal
+    from ..domains.tryon.service import run_render, render_out
+    from ..domains.tryon.render import RenderError
+    import uuid as _uuid
+
+    jobs.update(job_id, status="processing")
+    db = SessionLocal()
+    try:
+        row = run_render(db, _uuid.UUID(user_id), item_id, product_id, size)
+        jobs.update(job_id, status="done", result=render_out(row))
+    except RenderError as e:
+        jobs.update(job_id, status="failed", error=str(e))
+    except Exception as e:  # keep the worker alive; surface the failure on the job
+        jobs.update(job_id, status="failed", error=f"Try-on failed: {e}")
+    finally:
+        db.close()
+
+
 process_garment = _register(process_garment)
+render_tryon = _register(render_tryon)
 analyze_body = _register(analyze_body)

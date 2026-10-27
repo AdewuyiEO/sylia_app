@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/design/theme';
 import { Text } from '../../src/design/components/Text';
 import { Button } from '../../src/design/components/Button';
@@ -13,6 +14,8 @@ import { errorText } from '../../src/state/useAsync';
 import { api, type Recommendation } from '../../src/data/api/endpoints';
 import { price } from '../../src/lib/format';
 import { t } from '../../src/i18n';
+
+const TRYABLE = new Set(['top', 'bottom', 'dress', 'outerwear']);
 
 /**
  * Discover: only products that clear the fit gate for THIS closet, ranked by
@@ -59,6 +62,7 @@ function ProductCard({ rec, onBought }: { rec: Recommendation; onBought: () => v
   const { c } = useTheme();
   const toast = useToast();
   const [opening, setOpening] = useState(false);
+  const router = useRouter();
 
   const open = async () => {
     setOpening(true);
@@ -87,6 +91,10 @@ function ProductCard({ rec, onBought }: { rec: Recommendation; onBought: () => v
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           <Chip label={t('discover.newLooks', { count: rec.unlocks })} attention />
         </View>
+        {TRYABLE.has(rec.category) ? (
+          <Button label={`✦ ${t('tryon.tryOnMe')}`} variant="secondary" accessibilityHint={t('tryon.tryOnMeHint')}
+                  onPress={() => router.push({ pathname: '/tryon', params: { product_id: rec.product_id, rid: rec.recommendation_id, title: rec.title } })} />
+        ) : null}
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {/* one ember element per screen: cards repeat, so their actions stay quiet */}
           <Button label={t('discover.shop')} variant="secondary" onPress={open} loading={opening} style={{ flex: 1 }} />

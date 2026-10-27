@@ -16,6 +16,7 @@ from .domains.uploads.router import router as uploads_router
 from .domains.journey.router import router as journey_router
 from .domains.integrations.router import router as integrations_router
 from .domains.account.router import router as account_router
+from .domains.tryon.router import router as tryon_router
 from .domains.catalog.router import router as discover_router, partner as partner_router, admin as admin_router
 
 settings = get_settings()
@@ -44,5 +45,5 @@ def health() -> dict:
 
 for r in (auth_router, account_router, identity_router, vision_router, uploads_router,
           discover_router, closet_router, daily_look_router, coach_router, billing_router,
-          integrations_router, journey_router, partner_router, admin_router):
+          integrations_router, journey_router, tryon_router, partner_router, admin_router):
     app.include_router(r)

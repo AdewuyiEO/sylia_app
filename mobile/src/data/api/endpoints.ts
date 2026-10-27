@@ -129,6 +129,31 @@ export interface IdentityProfile {
   completed?: boolean;
 }
 
+export type Landmark = 'head' | 'l_shoulder' | 'r_shoulder' | 'l_hip' | 'r_hip' | 'feet';
+export type Landmarks = Record<Landmark, [number, number]>;
+export interface Measurements {
+  height_cm: number; bust_cm: number; waist_cm: number; hips_cm: number;
+  shoulder_cm?: number | null; inseam_cm?: number | null;
+}
+export interface TryOnProfile extends Partial<Measurements> {
+  exists: boolean; photo_url?: string; landmarks?: Landmarks;
+  retention?: '30d' | 'keep'; expires_at?: string | null;
+}
+export type FitLabel = 'too_tight' | 'fitted' | 'comfortable' | 'relaxed' | 'oversized';
+export interface SizeFit {
+  size: string; zones: { zone: 'bust' | 'waist' | 'hips'; ease_cm: number; label: FitLabel }[];
+  length_cm: number; score: number; tight: boolean; explanation: string;
+}
+export interface FitTable {
+  category: Category; renderable: boolean; chart_source: 'brand' | 'standard' | 'measured' | 'estimated';
+  recommended: string | null; sizes: SizeFit[];
+}
+export interface TryOnRender {
+  id: string; item_id: string | null; product_id: string | null; size: string; image_url: string;
+  fit: SizeFit & { chart_source: string; category: Category }; created_at: string;
+}
+export type TryTarget = { item_id: string } | { product_id: string };
+
 // ── auth + account ──────────────────────────────────────────────────────────
 export const auth = {
   async signup(email: string, password: string, region: Region) {
@@ -159,7 +184,7 @@ export const account = {
 };
 
 // ── uploads ─────────────────────────────────────────────────────────────────
-export async function uploadPhoto(localUri: string, purpose: 'closet' | 'body', contentType = 'image/jpeg') {
+export async function uploadPhoto(localUri: string, purpose: 'closet' | 'body' | 'tryon', contentType = 'image/jpeg') {
   const r = await http.post<{ key: string; upload: { url: string; method: string; headers: Record<string, string> } }>(
     ROUTES.uploads, { purpose, content_type: contentType });
   await putFile(r.upload.url, localUri, r.upload.headers);
@@ -236,6 +261,26 @@ export const discover = {
   click: (rid: string) => http.post<{ url: string }>(ROUTES.discoverClick(rid)),
 };
 
+// ── try-on (Sylia Pro) ──────────────────────────────────────────────────────
+export const tryon = {
+  profile: () => http.get<TryOnProfile>(ROUTES.tryonProfile),
+  saveProfile: (b: Measurements & { photo_key?: string; landmarks: Landmarks; retention: '30d' | 'keep';
+                                    consent: true; confirm_self: true }) =>
+    http.put<TryOnProfile>(ROUTES.tryonProfile, b),
+  deleteProfile: () => http.del<void>(ROUTES.tryonProfile),
+  fit: (target: TryTarget) => {
+    const q = 'item_id' in target ? `item_id=${target.item_id}` : `product_id=${target.product_id}`;
+    return http.get<FitTable>(`${ROUTES.tryonFit}?${q}`);
+  },
+  render: (target: TryTarget, size: string) =>
+    http.post<{ job_id: string; status: string }>(ROUTES.tryonRenders, { ...target, size }),
+  job: (jobId: string) => http.get<Job<TryOnRender>>(ROUTES.tryonJob(jobId)),
+  list: () => http.get<{ renders: TryOnRender[] }>(ROUTES.tryonRenders),
+  remove: (id: string) => http.del<void>(ROUTES.tryonRender(id)),
+  setItemSize: (itemId: string, size_label: string | null, measurements?: Record<string, number>) =>
+    http.put(ROUTES.tryonItemSize(itemId), { size_label, measurements }),
+};
+
 // ── integrations + billing ──────────────────────────────────────────────────
 export const calendar = {
   status: () => http.get<{ connected: boolean; available: boolean }>(ROUTES.calendar),
@@ -247,4 +292,4 @@ export const billing = {
   status: () => http.get<BillingStatus>(ROUTES.billingStatus),
 };
 
-export const api = { auth, account, dailyLook, journey, closet, body, identity, coach, discover, calendar, billing };
+export const api = { auth, account, dailyLook, journey, closet, body, identity, coach, discover, calendar, billing, tryon };

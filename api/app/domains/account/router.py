@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ...core.storage import storage
 from ...db import get_db
 from ...deps import get_current_user
-from ...models import (User, Subscription, IdentityProfile, BodyProfile, ClothingItem, Outfit,
+from ...models import (User, Subscription, IdentityProfile, BodyProfile, ClothingItem, Outfit, TryOnProfile, TryOnRender,
                        OutfitItem, CoachConversation, CoachMessage, CalendarConnection,
                        AffiliateRecommendation)
 
@@ -88,6 +88,8 @@ def export(db: Session = Depends(get_db), user: User = Depends(get_current_user)
             select(CoachMessage).where(CoachMessage.conversation_id == c.id))]} for c in convos],
         "calendar": [_plain(r) for r in _rows(db, CalendarConnection, user.id)],
         "recommendations": [_plain(r) for r in _rows(db, AffiliateRecommendation, user.id)],
+        "tryon_profile": [_plain(r) for r in _rows(db, TryOnProfile, user.id)],
+        "tryon_renders": [_plain(r) for r in _rows(db, TryOnRender, user.id)],
     }
 
 
@@ -100,13 +102,16 @@ def delete_account(db: Session = Depends(get_db), user: User = Depends(get_curre
         if bp.intake_image_s3_key:
             keys.append(bp.intake_image_s3_key)
 
+    keys += [r.image_key for r in _rows(db, TryOnRender, user.id)]
+    keys += [p.photo_key for p in _rows(db, TryOnProfile, user.id)]
+
     outfit_ids = [o.id for o in _rows(db, Outfit, user.id)]
     convo_ids = [c.id for c in _rows(db, CoachConversation, user.id)]
     if outfit_ids:
         db.query(OutfitItem).filter(OutfitItem.outfit_id.in_(outfit_ids)).delete(synchronize_session=False)
     if convo_ids:
         db.query(CoachMessage).filter(CoachMessage.conversation_id.in_(convo_ids)).delete(synchronize_session=False)
-    for model in (AffiliateRecommendation, Outfit, CoachConversation, ClothingItem, CalendarConnection,
+    for model in (TryOnRender, TryOnProfile, AffiliateRecommendation, Outfit, CoachConversation, ClothingItem, CalendarConnection,
                   BodyProfile, IdentityProfile, Subscription):
         db.query(model).filter(model.user_id == user.id).delete(synchronize_session=False)
     db.delete(user)
