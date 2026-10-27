@@ -128,6 +128,12 @@
         {
           "locationWhenInUsePermission": "Sylia uses your approximate location to get today’s weather for your outfit."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#BC4F26"
+        }
       ]
     ],
     "experiments": {

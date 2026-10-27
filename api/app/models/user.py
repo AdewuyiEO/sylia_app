@@ -1,8 +1,8 @@
 """users, subscriptions (spec §2.1, §2.8)."""
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
-from sqlalchemy import String, DateTime, Uuid, ForeignKey
+from sqlalchemy import String, DateTime, Uuid, ForeignKey, SmallInteger, Integer, JSON, Date
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..db import Base
@@ -32,6 +32,15 @@ class User(Base):
     country: Mapped[str | None] = mapped_column(String(2), nullable=True)  # ISO 3166-1 alpha-2
     units: Mapped[str] = mapped_column(String, default="metric")           # metric|imperial
     timezone: Mapped[str | None] = mapped_column(String, nullable=True)    # IANA, e.g. Europe/Paris
+    # daily habit loop: when the look unlocks, streak freezes, weekly challenge
+    reveal_hour: Mapped[int] = mapped_column(SmallInteger, default=7)
+    streak_freezes: Mapped[int] = mapped_column(SmallInteger, default=2)
+    freeze_dates: Mapped[list] = mapped_column(JSON, default=list)          # ISO dates covered by a freeze
+    freeze_awarded_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    challenge_week: Mapped[str | None] = mapped_column(String, nullable=True)       # e.g. 2026-W42, accepted
+    challenge_item_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    challenge_done_week: Mapped[str | None] = mapped_column(String, nullable=True)
+    bonus_points: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

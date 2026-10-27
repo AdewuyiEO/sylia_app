@@ -12,6 +12,7 @@ export interface Region { locale?: string; country?: string | null; timezone?: s
 export interface Me {
   id: string; email: string; display_name: string | null; auth_provider: string;
   locale: string; country: string | null; units: 'metric' | 'imperial'; timezone: string | null;
+  reveal_hour: number;
 }
 
 export type Category = 'top' | 'bottom' | 'dress' | 'outerwear' | 'shoes' | 'accessory';
@@ -56,7 +57,21 @@ export interface LookContext {
   context_kind?: 'work' | 'weekend';
 }
 
-export interface DailyLookResponse { date: string; context?: LookContext; looks: ApiLook[]; reason?: string }
+export interface DailyLookResponse {
+  date: string; context?: LookContext; looks: ApiLook[]; reason?: string;
+  revealed?: boolean; reveal_hour?: number; next_reveal_at?: string;
+}
+
+export interface JourneyDay { date: string; state: 'worn' | 'frozen' | 'missed' | 'today'; image_url: string | null }
+export interface Badge { id: string; title: string; earned: boolean; progress: number; image_url: string | null }
+export interface Journey {
+  streak: number; longest: number; freezes: number; max_freezes: number; worn_today: boolean;
+  days: JourneyDay[];
+  level: { level: number; name: string; points: number; floor: number; next_at: number | null; next_name: string | null };
+  challenge: null | { week: string; item: ApiItem; title: string; points: number; accepted: boolean; completed: boolean; days_left: number };
+  badges: Badge[];
+  reveal_hour: number;
+}
 
 export interface Stats {
   weekly_worn_outfits: number;
@@ -137,7 +152,7 @@ export const auth = {
 
 export const account = {
   me: () => http.get<Me>(ROUTES.me),
-  update: (patch: Partial<Pick<Me, 'display_name' | 'locale' | 'country' | 'units' | 'timezone'>>) =>
+  update: (patch: Partial<Pick<Me, 'display_name' | 'locale' | 'country' | 'units' | 'timezone' | 'reveal_hour'>>) =>
     http.patch<Me>(ROUTES.me, patch),
   export: () => http.get<Record<string, unknown>>(ROUTES.meExport),
   delete: () => http.del<void>(ROUTES.me),
@@ -164,7 +179,14 @@ export const dailyLook = {
     return http.post<ApiLook>(ROUTES.lookRegenerate(id), excludeItemId ? { exclude_item_id: excludeItemId } : {});
   },
   history: (days = 30) => http.get<{ looks: ApiLook[] }>(`${ROUTES.lookHistory}?days=${days}`),
+  reveal: (id: string) => http.post<{ revealed: boolean; streak: number; worn_today: boolean; freezes: number }>(ROUTES.lookReveal(id)),
   stats: () => http.get<Stats>(ROUTES.stats),
+};
+
+// ── style journey ───────────────────────────────────────────────────────────
+export const journey = {
+  get: () => http.get<Journey>(ROUTES.journey),
+  acceptChallenge: () => http.post<Journey>(ROUTES.journeyAccept),
 };
 
 // ── closet ──────────────────────────────────────────────────────────────────
@@ -225,4 +247,4 @@ export const billing = {
   status: () => http.get<BillingStatus>(ROUTES.billingStatus),
 };
 
-export const api = { auth, account, dailyLook, closet, body, identity, coach, discover, calendar, billing };
+export const api = { auth, account, dailyLook, journey, closet, body, identity, coach, discover, calendar, billing };

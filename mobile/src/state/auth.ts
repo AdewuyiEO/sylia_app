@@ -8,6 +8,7 @@ import { ApiError, tokens } from '../data/api/client';
 import * as purchases from '../data/purchases';
 import { deviceRegion } from '../lib/device';
 import { t } from '../i18n';
+import { cancelDailyReveal } from '../lib/reminders';
 
 interface AuthState {
   status: 'unknown' | 'authed' | 'guest';
@@ -77,6 +78,7 @@ export const useAuth = create<AuthState>((set, get) => {
     setMe: (me) => set({ me }),
 
     logout: async () => {
+      await cancelDailyReveal();
       await purchases.forget();
       await api.auth.logout();
       set({ status: 'guest', me: null, error: null });
@@ -84,6 +86,7 @@ export const useAuth = create<AuthState>((set, get) => {
 
     /** after account deletion: tokens are already dead server-side */
     clear: () => {
+      cancelDailyReveal();
       tokens.clear();
       purchases.forget();
       set({ status: 'guest', me: null, error: null });

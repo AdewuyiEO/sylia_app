@@ -115,12 +115,9 @@ def wear_stats(db, user, today: date) -> dict:
     days = {d for d, _ in worn}
     wwo = len({d for d in days if d > today - timedelta(days=7)})
 
-    streak, d = 0, today
-    if d not in days:
-        d -= timedelta(days=1)          # today not logged yet doesn't break a streak
-    while d in days:
-        streak += 1
-        d -= timedelta(days=1)
+    from ..journey.service import walk_streak
+    frozen = {date.fromisoformat(x) for x in (getattr(user, "freeze_dates", None) or [])}
+    streak = walk_streak(days, frozen, today)
 
     active = list(db.scalars(select(ClothingItem).where(
         ClothingItem.user_id == user.id, ClothingItem.is_active == True)))  # noqa: E712

@@ -24,6 +24,7 @@ class Outfit(Base):
     user_feedback: Mapped[str] = mapped_column(String, default="pending")   # pending|worn|skipped|loved|disliked
     feedback_note: Mapped[str | None] = mapped_column(String, nullable=True)
     worn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 

@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '../src/design/theme';
 import { ToastProvider } from '../src/ui/toast';
 import { useAuth } from '../src/state/auth';
+import { onReminderTap } from '../src/lib/reminders';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -26,6 +27,12 @@ function AuthGate() {
   useEffect(() => {
     hydrate();
   }, []);
+
+  // the 7:00 reminder opens the reveal (also when it launched the app)
+  useEffect(() => {
+    if (status !== 'authed') return;
+    return onReminderTap((url) => router.push(url as '/reveal'));
+  }, [status]);
 
   const prev = React.useRef(status);
   useEffect(() => {
@@ -45,6 +52,7 @@ function AuthGate() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
         <Stack.Screen name="capture" options={{ presentation: 'modal' }} />
         <Stack.Screen name="paywall" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="reveal" options={{ presentation: 'fullScreenModal', animation: 'fade' }} />
       </Stack>
     </>
   );

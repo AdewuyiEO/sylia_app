@@ -25,12 +25,14 @@ class ProfilePatch(BaseModel):
     country: str | None = Field(default=None, min_length=2, max_length=2)
     units: str | None = Field(default=None, pattern="^(metric|imperial)$")
     timezone: str | None = Field(default=None, max_length=64)
+    reveal_hour: int | None = Field(default=None, ge=0, le=23)
 
 
 def _profile(user: User) -> dict:
     return {"id": str(user.id), "email": user.email, "display_name": user.display_name,
             "auth_provider": user.auth_provider, "locale": user.locale, "country": user.country,
             "units": user.units, "timezone": user.timezone,
+            "reveal_hour": user.reveal_hour if user.reveal_hour is not None else 7,
             "created_at": user.created_at.isoformat() if user.created_at else None}
 
 

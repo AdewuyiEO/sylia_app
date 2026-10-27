@@ -130,7 +130,7 @@ def get_daily_look(date: str | None = None, lat: float | None = None,
     # keep the day's looks stable unless the user removed a piece from their closet
     if existing and all(_still_wearable(db, o, active_ids) for o in existing):
         ctx = existing[0].context or {}
-        return {"date": day.isoformat(), "context": ctx,
+        return {"date": day.isoformat(), "context": ctx, **_reveal_info(user, day, existing),
                 "looks": [_look_out(db, o, items_by_id) for o in existing if o.user_feedback != "skipped"]}
 
     for o in existing:   # stale: a piece was deleted — drop unworn looks and rebuild
@@ -149,7 +149,7 @@ def get_daily_look(date: str | None = None, lat: float | None = None,
 
     saved = [_persist(db, user, day, ctx, c, rank) for rank, c in enumerate(looks, start=1)]
     db.commit()
-    return {"date": day.isoformat(), "context": ctx,
+    return {"date": day.isoformat(), "context": ctx, **_reveal_info(user, day, saved),
             "looks": [_look_out(db, o, items_by_id) for o in saved]}
 
 
@@ -214,6 +214,28 @@ def history(days: int = 30, db: Session = Depends(get_db), user: User = Depends(
         .order_by(Outfit.outfit_date.desc())))
     items_by_id = {i.id: i for i in db.scalars(select(ClothingItem).where(ClothingItem.user_id == user.id))}
     return {"looks": [_look_out(db, o, items_by_id) for o in worn]}
+
+
+def _reveal_info(user: User, day: date_cls, outfits: list[Outfit]) -> dict:
+    """The day's look is 'revealed' once the user has opened it (or worn one)."""
+    from ..journey.service import next_reveal_at
+    revealed = any(o.revealed_at or o.user_feedback == "worn" for o in outfits)
+    return {"revealed": revealed, "reveal_hour": user.reveal_hour if user.reveal_hour is not None else 7,
+            "next_reveal_at": next_reveal_at(user, day)}
+
+
+@router.post("/{outfit_id}/reveal")
+def reveal(outfit_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Mark the day revealed (the morning curtain moment). Idempotent."""
+    from ..journey.service import refresh
+    outfit = _owned_outfit(db, user, outfit_id)
+    now = datetime.now(timezone.utc)
+    for o in _day_outfits(db, user, outfit.outfit_date):
+        if o.revealed_at is None:
+            o.revealed_at = now
+    db.commit()
+    j = refresh(db, user, service.local_today(user))
+    return {"revealed": True, "streak": j["streak"], "worn_today": j["worn_today"], "freezes": j["freezes"]}
 
 
 @router.get("/stats")

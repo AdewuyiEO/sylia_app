@@ -13,6 +13,7 @@ from .domains.daily_look.router import router as daily_look_router
 from .domains.coach.router import router as coach_router
 from .domains.billing.router import router as billing_router
 from .domains.uploads.router import router as uploads_router
+from .domains.journey.router import router as journey_router
 from .domains.integrations.router import router as integrations_router
 from .domains.account.router import router as account_router
 from .domains.catalog.router import router as discover_router, partner as partner_router, admin as admin_router
@@ -43,5 +44,5 @@ def health() -> dict:
 
 for r in (auth_router, account_router, identity_router, vision_router, uploads_router,
           discover_router, closet_router, daily_look_router, coach_router, billing_router,
-          integrations_router, partner_router, admin_router):
+          integrations_router, journey_router, partner_router, admin_router):
     app.include_router(r)

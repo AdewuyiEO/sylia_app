@@ -40,6 +40,10 @@ export const ROUTES = {
   lookRegenerate: (id: string) => `/v1/daily-look/${id}/regenerate`,
   lookHistory: '/v1/daily-look/history',
   stats: '/v1/daily-look/stats',
+  lookReveal: (id: string) => `/v1/daily-look/${id}/reveal`,
+
+  journey: '/v1/journey',
+  journeyAccept: '/v1/journey/challenge/accept',
 
   items: '/v1/wardrobe/items',
   item: (id: string) => `/v1/wardrobe/items/${id}`,

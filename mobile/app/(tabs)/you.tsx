@@ -42,6 +42,7 @@ export default function YouScreen() {
         </Card>
 
         <View style={{ gap: 8 }}>
+          <Row label={t('you.journey')} onPress={() => router.push('/journey')} />
           <Row label={t('you.styleProfile')} onPress={() => router.push('/onboarding')} />
           <Row label={t('you.bodyProfile')} onPress={() => router.push('/body')} />
           <Row label={t('you.settings')} onPress={() => router.push('/settings')} />

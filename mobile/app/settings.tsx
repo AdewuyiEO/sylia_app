@@ -13,6 +13,7 @@ import { useAsync, errorText } from '../src/state/useAsync';
 import { api } from '../src/data/api/endpoints';
 import * as purchases from '../src/data/purchases';
 import { LEGAL } from '../src/data/api/config';
+import { scheduleDailyReveal } from '../src/lib/reminders';
 import { t } from '../src/i18n';
 
 /** Settings: units, region, coverage, calendar, privacy (export, delete), purchases. */
@@ -91,6 +92,15 @@ export default function SettingsScreen() {
         <Text variant="label" tone="ink60">{t('settings.units')}</Text>
         <Segmented value={me?.units ?? 'metric'} onChange={(v) => update({ units: v })}
                    options={[{ value: 'metric', label: t('settings.metric') }, { value: 'imperial', label: t('settings.imperial') }]} />
+
+        <Text variant="label" tone="ink60">{t('settings.reveal')}</Text>
+        <Segmented value={String(me?.reveal_hour ?? 7) as '6' | '7' | '8' | '9'}
+                   onChange={async (v) => {
+                     await update({ reveal_hour: Number(v) });
+                     try { scheduleDailyReveal(Number(v), (await api.dailyLook.stats()).streak_days); } catch {}
+                   }}
+                   options={(['6', '7', '8', '9'] as const).map((h) => ({ value: h, label: `${h}:00` }))} />
+        <Text variant="small" tone="ink60">{t('settings.revealHint')}</Text>
 
         <Field label={t('settings.country')} value={country} autoCapitalize="characters" maxLength={2}
                onChangeText={(v) => setCountry(v.toUpperCase())}
