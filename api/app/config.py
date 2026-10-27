@@ -1,5 +1,6 @@
 """Application settings, loaded from environment / .env (see .env.example)."""
 from functools import lru_cache
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,17 @@ class Settings(BaseSettings):
 
     # sqlite default lets the app + tests boot with zero infra; use Postgres in prod.
     database_url: str = "sqlite:///./sylia_dev.db"
+
+    @field_validator("database_url")
+    @classmethod
+    def _psycopg3(cls, v: str) -> str:
+        # Render/Heroku hand out postgres:// or postgresql://, which SQLAlchemy maps to
+        # psycopg2; we ship psycopg 3.
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix):]
+        return v
+
     redis_url: str = "redis://localhost:6379/0"
     require_redis: bool = False          # prod with a separate worker: fail fast without Redis
 
