@@ -1,0 +1,102 @@
+# Sylia on one VPS: HTTPS proxy, API, background worker, Postgres, Redis, nightly DB backups.
+# Photos live on the server's disk (the "photos" volume). See DEPLOY-VPS.md.
+#   first run / every update:  docker compose up -d --build
+name: sylia
+
+x-app: &app
+  image: sylia-api:latest
+  build: ../api
+  restart: unless-stopped
+  env_file: .env
+  environment: &app-env
+    ENV: prod
+    DATABASE_URL: postgresql+psycopg://sylia:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/sylia
+    REDIS_URL: redis://redis:6379/0
+    REQUIRE_REDIS: "true"
+    STORAGE_BACKEND: disk
+    LOCAL_STORAGE_DIR: /data/photos
+    PUBLIC_BASE_URL: https://${DOMAIN:?set DOMAIN in .env}
+  volumes:
+    - photos:/data/photos
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+
+  api:
+    <<: *app
+    # migrations run once here, before the API starts serving
+    command: sh -c "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips='*'"
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # try-on renders, garment tagging, body analysis — off the request path
+  worker:
+    <<: *app
+    command: celery -A app.workers.celery_app worker --include app.workers.tasks --concurrency 2 --loglevel info
+    depends_on:
+      api: { condition: service_healthy }
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sylia
+      POSTGRES_DB: sylia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sylia -d sylia"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # jobs + rate limits only: nothing here needs to survive a restart
+    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+
+  # nightly compressed database dump, 14 days kept, in the "backups" volume
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          f=/backups/sylia-$$(date +%Y%m%d-%H%M).sql.gz
+          pg_dump -h db -U sylia sylia | gzip > "$$f" && echo "backup ok: $$f" || echo "backup FAILED"
+          find /backups -name 'sylia-*.sql.gz' -mtime +14 -delete
+          sleep 86400
+        done
+    depends_on:
+      db: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  photos:
+  backups:
+  caddy_data:
+  caddy_config:

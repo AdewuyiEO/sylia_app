@@ -40,7 +40,9 @@ class Settings(BaseSettings):
     apple_bundle_id: str = "com.sylia.stylist"   # Sign in with Apple audience
     admin_token: str | None = None       # guards /v1/admin (brand onboarding)
 
-    # object storage
+    # object storage: "disk" keeps photos on this server (single-VPS deploys),
+    # "s3" uses S3/R2, "auto" = local in dev, S3 elsewhere
+    storage_backend: str = "auto"
     s3_bucket: str = "sylia-dev"
     s3_endpoint_url: str | None = None            # set for Cloudflare R2
     upload_max_bytes: int = 15 * 1024 * 1024

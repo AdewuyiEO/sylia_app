@@ -1,0 +1,14 @@
+# HTTPS for the API. Caddy gets and renews the certificate on its own once
+# DOMAIN's DNS A record points at this server.
+{$DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 16MB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	reverse_proxy api:8000
+}

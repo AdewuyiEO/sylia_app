@@ -3,8 +3,9 @@
 Prod: boto3 against S3 or R2 (R2 is S3-compatible via an endpoint URL). Phones
 upload straight to the bucket with a presigned PUT and read images back with
 presigned GETs, so image bytes never pass through the API.
-Dev/tests: a local directory, with short-lived signed URLs served by the API
-itself (/v1/uploads/local, /v1/files) so the client flow is identical.
+Disk (dev, tests, and single-VPS deploys with STORAGE_BACKEND=disk): a local
+directory, with short-lived signed URLs served by the API itself
+(/v1/uploads/local, /v1/files) so the client flow is identical.
 """
 from __future__ import annotations
 
@@ -113,7 +114,11 @@ class _S3Storage:  # pragma: no cover - exercised in prod
 
 
 def get_storage():
-    # use S3/R2 when an endpoint or real bucket is configured; else local dev store
+    if settings.storage_backend == "disk":
+        return _LocalStorage(_LOCAL_ROOT)
+    if settings.storage_backend == "s3":
+        return _S3Storage()
+    # auto: S3/R2 when an endpoint is configured or outside dev; else the local dev store
     if settings.env != "dev" or settings.s3_endpoint_url:
         try:
             return _S3Storage()

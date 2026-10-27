@@ -53,7 +53,7 @@ def create_upload(body: UploadIn, user: User = Depends(get_current_user)):
 
 @router.put("/uploads/local", status_code=204, include_in_schema=False)
 async def put_local(token: str, request: Request) -> Response:
-    """Dev-only stand-in for the S3 presigned PUT."""
+    """Signed PUT for disk storage (dev, or a single-VPS deploy)."""
     if not is_local():
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     try:
@@ -71,7 +71,7 @@ async def put_local(token: str, request: Request) -> Response:
 
 @router.get("/files", include_in_schema=False)
 def get_local(token: str) -> Response:
-    """Dev-only stand-in for an S3 presigned GET."""
+    """Signed GET for disk storage (dev, or a single-VPS deploy)."""
     if not is_local():
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     try:
